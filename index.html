@@ -281,7 +281,7 @@
     </div>
     <div class="field">
       <label>工程</label>
-      <select id="selKotei"><option>施工前</option><option selected>施工状況</option><option>工程管理</option><option>施工完了</option></select>
+      <select id="selKotei"><option selected>施工前</option><option>施工状況</option><option>工程管理</option><option>施工完了</option></select>
     </div>
     <div class="field">
       <label>撮影項目(必須ショット)</label>
@@ -605,12 +605,13 @@ function updateRemainChip(){
   document.getElementById('remainChip').textContent = `残り ${required.length - done} / ${required.length}`;
 }
 
-/* ゴースト: 同じ工種・中科目・同じ項目で、直近に撮った別工程の写真を探す */
+/* ゴースト: 同じ工種・中科目・同じ測点で、直近に撮った別工程の写真を探す(同じ項目名の写真があればそれを優先) */
 async function updateGhost(){
   const s = currentSelection();
-  const cand = photos
-    .filter(p => p.kosyu===s.kosyu && p.chuka===s.chuka && p.item===s.item && p.kotei!==s.kotei)
-    .sort((a,b)=>b.ts-a.ts)[0];
+  const matches = photos
+    .filter(p => p.kosyu===s.kosyu && p.chuka===s.chuka && p.sokuten===s.sokuten && p.kotei!==s.kotei)
+    .sort((a,b)=>b.ts-a.ts);
+  const cand = matches.find(p=>p.item===s.item) || matches[0];
   const img = document.getElementById('ghostImg');
   if(cand){
     img.src = cand.thumb;
