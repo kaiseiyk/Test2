@@ -90,6 +90,16 @@
   }
   .primary-btn:active{opacity:.8;}
   .hint{padding:0 16px;font-size:11.5px;color:var(--steel);line-height:1.6;}
+  .color-swatches{display:flex;gap:10px;flex-wrap:wrap;padding-top:4px;}
+  .color-swatch{
+    width:36px;height:36px;border-radius:50%;cursor:pointer;
+    border:3px solid transparent;box-shadow:0 0 0 1px var(--line) inset;
+  }
+  .color-swatch.active{border-color:var(--amber);box-shadow:0 0 0 2px var(--amber);}
+  .color-swatch.custom{
+    background:#fff;display:flex;align-items:center;justify-content:center;
+    color:var(--steel);font-size:18px;font-weight:700;
+  }
 
   /* ---- 撮影タブ ---- */
   .camwrap{flex:1;position:relative;background:#111;min-height:420px;}
@@ -127,20 +137,20 @@
     box-shadow:0 0 0 3px var(--amber), 0 12px 26px rgba(0,0,0,.6);
     opacity:.92;
   }
-  .bb-row{display:flex;border-bottom:2px solid #fff;}
+  .bb-row{display:flex;border-bottom:2px solid var(--bb-line, #fff);}
   .bb-row:last-child{border-bottom:none;}
-  .bb-label{color:#fff;font-weight:700;font-size:11px;padding:4px 6px;border-right:2px solid #fff;white-space:nowrap;display:flex;align-items:center;}
-  .bb-fill{flex:1;color:#eafbe9;font-size:9.5px;font-weight:700;padding:4px 6px;display:flex;align-items:center;border-right:2px solid #fff;}
+  .bb-label{color:var(--bb-text, #fff);font-weight:700;font-size:11px;padding:4px 6px;border-right:2px solid var(--bb-line, #fff);white-space:nowrap;display:flex;align-items:center;}
+  .bb-fill{flex:1;color:var(--bb-text-dim, #eafbe9);font-size:9.5px;font-weight:700;padding:4px 6px;display:flex;align-items:center;border-right:2px solid var(--bb-line, #fff);}
   .bb-fill:last-child{border-right:none;}
   .bb-fill.editable{cursor:pointer;position:relative;}
   .bb-fill.editable::after{content:"✎";font-size:8px;margin-left:4px;opacity:.75;}
-  .bb-fill.editable:active{background:rgba(255,255,255,.15);}
+  .bb-fill.editable:active{background:rgba(128,128,128,.15);}
   .bb-grid{height:64px;position:relative;background-image:
-      repeating-linear-gradient(0deg, rgba(255,255,255,0.4) 0 1px, transparent 1px 15px),
-      repeating-linear-gradient(90deg, rgba(255,255,255,0.4) 0 1px, transparent 1px 15px);}
+      repeating-linear-gradient(0deg, var(--bb-grid-line, rgba(255,255,255,0.4)) 0 1px, transparent 1px 15px),
+      repeating-linear-gradient(90deg, var(--bb-grid-line, rgba(255,255,255,0.4)) 0 1px, transparent 1px 15px);}
   .bb-item-note{
     position:absolute;top:6px;left:6px;right:6px;
-    color:#fff;font-weight:700;font-size:12px;
+    color:var(--bb-text, #fff);font-weight:700;font-size:12px;
     font-family:'Zen Kaku Gothic New',sans-serif;
     cursor:pointer;
   }
@@ -364,7 +374,7 @@
 
   <!-- 現場情報 -->
   <div class="view" id="v5">
-    <div class="topbar"><div class="ttl">現場情報の編集</div><div class="sub">電子黒板の「工事名」「施工会社」を設定します</div></div>
+    <div class="topbar"><div class="ttl">現場情報の編集</div><div class="sub">電子黒板の「工事名」「施工会社」「色」を設定します</div></div>
     <div class="field">
       <label>工事名</label>
       <input type="text" id="inKoji" placeholder="例: 〇〇マンション新築工事">
@@ -372,6 +382,10 @@
     <div class="field">
       <label>施工会社</label>
       <input type="text" id="inCompany" placeholder="例: 〇〇建設(株)">
+    </div>
+    <div class="field">
+      <label>黒板の色</label>
+      <div class="color-swatches" id="boardColorSwatches"></div>
     </div>
     <div class="hint" style="padding-top:6px;">入力すると自動で保存され、②撮影画面の電子黒板にすぐ反映されます。</div>
   </div>
@@ -447,11 +461,11 @@ function migrateTemplate(){
 }
 
 /* ---------------- 現場情報(工事名・施工会社) ---------------- */
-let siteInfo = { koji: "〇〇マンション新築工事", company: "△△建設(株)" };
+let siteInfo = { koji: "〇〇マンション新築工事", company: "△△建設(株)", boardColor: "#2f6b45" };
 async function loadSiteInfo(){
   try{
     const r = await storage.get('siteInfo');
-    if(r) siteInfo = JSON.parse(r.value);
+    if(r) siteInfo = Object.assign({ koji: "〇〇マンション新築工事", company: "△△建設(株)", boardColor: "#2f6b45" }, JSON.parse(r.value));
   }catch(e){ /* デフォルト値を使用 */ }
 }
 async function saveSiteInfo(){
@@ -546,9 +560,68 @@ document.querySelectorAll('.tabbtn').forEach(btn=>{
 });
 
 /* ---------------- 現場情報フォーム ---------------- */
+const BOARD_COLOR_PRESETS = [
+  { name: 'グリーン', color: '#2f6b45' },
+  { name: 'ブラック', color: '#1c1f22' },
+  { name: 'ネイビー', color: '#1f3a5f' },
+  { name: 'ブラウン', color: '#4a3324' },
+  { name: 'ホワイト', color: '#ffffff' }
+];
+
+function relativeLuminance(hex){
+  hex = (hex || '').replace('#','');
+  if(hex.length === 3) hex = hex.split('').map(c=>c+c).join('');
+  if(hex.length !== 6) return 0; // 不正な値は暗色扱い
+  const r = parseInt(hex.substr(0,2),16)/255;
+  const g = parseInt(hex.substr(2,2),16)/255;
+  const b = parseInt(hex.substr(4,2),16)/255;
+  const lin = c => c<=0.03928 ? c/12.92 : Math.pow((c+0.055)/1.055, 2.4);
+  return 0.2126*lin(r) + 0.7152*lin(g) + 0.0722*lin(b);
+}
+
+function applyBoardColor(){
+  const bb = document.querySelector('.blackboard');
+  if(!bb) return;
+  bb.style.background = siteInfo.boardColor;
+  const isLight = relativeLuminance(siteInfo.boardColor) > 0.5;
+  bb.style.setProperty('--bb-text', isLight ? '#20232a' : '#ffffff');
+  bb.style.setProperty('--bb-text-dim', isLight ? '#3f434a' : '#eafbe9');
+  bb.style.setProperty('--bb-line', isLight ? '#8b9096' : '#ffffff');
+  bb.style.setProperty('--bb-grid-line', isLight ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.4)');
+}
+
+function renderBoardColorSwatches(){
+  const wrap = document.getElementById('boardColorSwatches');
+  const isPreset = BOARD_COLOR_PRESETS.some(p => p.color === siteInfo.boardColor);
+  wrap.innerHTML = BOARD_COLOR_PRESETS.map(p =>
+    `<div class="color-swatch ${p.color===siteInfo.boardColor?'active':''}" style="background:${p.color}" data-color="${p.color}" title="${p.name}"></div>`
+  ).join('') +
+    `<div class="color-swatch custom ${!isPreset?'active':''}" id="boardColorCustomSwatch" title="カスタム">+</div>` +
+    `<input type="color" id="boardColorCustom" value="${isPreset ? siteInfo.boardColor : siteInfo.boardColor}" style="display:none;">`;
+
+  wrap.querySelectorAll('.color-swatch[data-color]').forEach(sw=>{
+    sw.addEventListener('click', async ()=>{
+      siteInfo.boardColor = sw.dataset.color;
+      await saveSiteInfo();
+      applyBoardColor();
+      renderBoardColorSwatches();
+    });
+  });
+  document.getElementById('boardColorCustomSwatch').addEventListener('click', ()=>{
+    document.getElementById('boardColorCustom').click();
+  });
+  document.getElementById('boardColorCustom').addEventListener('input', async (e)=>{
+    siteInfo.boardColor = e.target.value;
+    await saveSiteInfo();
+    applyBoardColor();
+    renderBoardColorSwatches();
+  });
+}
+
 function renderSiteInfoForm(){
   document.getElementById('inKoji').value = siteInfo.koji;
   document.getElementById('inCompany').value = siteInfo.company;
+  renderBoardColorSwatches();
 }
 document.getElementById('inKoji').addEventListener('change', async (e)=>{
   siteInfo.koji = e.target.value.trim() || siteInfo.koji;
@@ -662,20 +735,48 @@ function openEditSheet(field){
   editingField = field;
   esOk.textContent = '決定';
   esOk.classList.remove('danger');
+
+  // 「一覧から選ぶ + 新規入力」共通のセレクト初期化
+  function setupSelectWithNew(){
+    const selEl = document.getElementById('esInput');
+    const newEl = document.getElementById('esInputNew');
+    const sync = ()=>{
+      const isNew = selEl.value === '__new__';
+      newEl.style.display = isNew ? 'block' : 'none';
+      if(isNew) newEl.focus();
+    };
+    selEl.addEventListener('change', sync);
+    sync();
+  }
+
   if(field === 'kosyu'){
     esTitle.textContent = '工種を選択';
-    esBody.innerHTML = `<select id="esInput">${kosyuList().map(k=>`<option ${k===selKosyu.value?'selected':''}>${k}</option>`).join('')}</select>`;
+    esBody.innerHTML =
+      `<select id="esInput">${kosyuList().map(k=>`<option ${k===selKosyu.value?'selected':''}>${k}</option>`).join('')}<option value="__new__">＋ 新しい工種を入力</option></select>` +
+      `<input type="text" id="esInputNew" placeholder="例: 防水工事" style="display:none;margin-top:10px;">`;
+    setupSelectWithNew();
   } else if(field === 'chuka'){
     esTitle.textContent = '中科目を選択';
     const list = chukaList(selKosyu.value);
     esBody.innerHTML = `<select id="esInput">${list.map(c=>`<option ${c===selChuka.value?'selected':''}>${c}</option>`).join('')}</select>`;
   } else if(field === 'sokuten'){
-    esTitle.textContent = '測点を入力';
-    esBody.innerHTML = `<input type="text" id="esInput" value="${document.getElementById('inSokuten').value}" placeholder="例: 2F 通り X3-Y2">`;
+    esTitle.textContent = '測点を選択';
+    const cur = document.getElementById('inSokuten').value;
+    const known = sokutenListFor(selKosyu.value, selChuka.value);
+    const list = Array.from(new Set([...known, cur].filter(Boolean))).sort();
+    esBody.innerHTML =
+      `<select id="esInput">${list.map(s=>`<option ${s===cur?'selected':''}>${s}</option>`).join('')}<option value="__new__">＋ 新しい測点を入力</option></select>` +
+      `<input type="text" id="esInputNew" placeholder="例: 2F 通り X3-Y2" style="display:none;margin-top:10px;">`;
+    if(list.length === 0){ document.getElementById('esInput').value = '__new__'; }
+    setupSelectWithNew();
   } else if(field === 'item'){
     esTitle.textContent = '撮影項目を選択(2/2)';
     const items = (TEMPLATE[selKosyu.value] && TEMPLATE[selKosyu.value][selChuka.value] && TEMPLATE[selKosyu.value][selChuka.value][selKotei.value]) || [];
-    esBody.innerHTML = `<select id="esInput">${items.map(i=>`<option ${i.name===selItem.value?'selected':''}>${i.name}</option>`).join('')}</select>`;
+    esBody.innerHTML =
+      `<select id="esInput">${items.map(i=>`<option ${i.name===selItem.value?'selected':''}>${i.name}</option>`).join('')}<option value="__new__">＋ 新しい項目を入力</option></select>` +
+      `<input type="text" id="esInputNew" placeholder="例: 全景写真" style="display:none;margin-top:10px;">`;
+    if(items.length === 0){ document.getElementById('esInput').value = '__new__'; }
+    setupSelectWithNew();
   } else if(field === 'itemFlow'){
     esTitle.textContent = '工程を選択(1/2)';
     const list = ["施工前","施工状況","工程管理","施工完了"];
@@ -719,8 +820,29 @@ editBackdrop.addEventListener('click', (e)=>{ if(e.target === editBackdrop) clos
 esOk.addEventListener('click', async ()=>{
   const esInputEl = document.getElementById('esInput');
   const val = esInputEl ? esInputEl.value : '';
+  function resolveNew(v){
+    if(v === '__new__'){
+      const newEl = document.getElementById('esInputNew');
+      return newEl ? newEl.value.trim() : '';
+    }
+    return v;
+  }
   if(editingField === 'kosyu'){
-    selKosyu.value = val;
+    const finalVal = resolveNew(val);
+    if(!finalVal){ closeEditSheet(); return; }
+    if(!TEMPLATE[finalVal]){
+      TEMPLATE[finalVal] = {
+        "共通": {
+          "施工前": [{name:"施工前", required:true}],
+          "施工状況": [],
+          "工程管理": [{name:"工程管理", required:true}],
+          "施工完了": [{name:"施工完了", required:true}]
+        }
+      };
+      await saveTemplate();
+      refreshKosyuSelects();
+    }
+    selKosyu.value = finalVal;
     refreshSetupChuka();
     selChuka.value = selChuka.options[0] ? selChuka.options[0].value : '';
     refreshItemOptions();
@@ -734,11 +856,25 @@ esOk.addEventListener('click', async ()=>{
     closeEditSheet();
     updateBlackboard(); updateRemainChip(); await updateGhost(); applyGhostVisibility();
   } else if(editingField === 'sokuten'){
-    document.getElementById('inSokuten').value = val;
+    const finalVal = resolveNew(val);
+    if(finalVal) document.getElementById('inSokuten').value = finalVal;
     closeEditSheet();
     updateBlackboard(); updateRemainChip(); await updateGhost(); applyGhostVisibility();
   } else if(editingField === 'item'){
-    selItem.value = val;
+    const finalVal = resolveNew(val);
+    if(!finalVal){ closeEditSheet(); return; }
+    const k = selKosyu.value, c = selChuka.value, t = selKotei.value;
+    if(TEMPLATE[k] && TEMPLATE[k][c]){
+      if(!TEMPLATE[k][c][t]) TEMPLATE[k][c][t] = [];
+      const exists = TEMPLATE[k][c][t].some(i=>i.name===finalVal);
+      if(!exists){
+        TEMPLATE[k][c][t].push({name:finalVal, required:true});
+        if(t === '施工状況') syncManagementItems(k, c);
+        await saveTemplate();
+      }
+    }
+    refreshItemOptions();
+    selItem.value = finalVal;
     closeEditSheet();
     updateBlackboard(); updateRemainChip(); await updateGhost(); applyGhostVisibility();
   } else if(editingField === 'itemFlow'){
@@ -1199,6 +1335,7 @@ if('serviceWorker' in navigator){
 /* ---------------- init ---------------- */
 (async function init(){
   await loadSiteInfo();
+  applyBoardColor();
   await loadTemplate();
   refreshKosyuSelects();
   refreshSetupChuka();
