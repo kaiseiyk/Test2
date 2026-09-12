@@ -379,6 +379,18 @@
 </div>
 
 <script>
+/* ---------------- 端末保存(ブラウザ標準のlocalStorageを使用) ---------------- */
+const storage = {
+  async get(key){
+    const v = localStorage.getItem(key);
+    return v !== null ? { value: v } : null;
+  },
+  async set(key, value){
+    localStorage.setItem(key, value);
+    return { value };
+  }
+};
+
 /* ---------------- テンプレート(初期値。編集内容は端末に保存され上書きされる) ---------------- */
 const DEFAULT_TEMPLATE = {};
 let TEMPLATE = {};
@@ -438,24 +450,24 @@ function migrateTemplate(){
 let siteInfo = { koji: "〇〇マンション新築工事", company: "△△建設(株)" };
 async function loadSiteInfo(){
   try{
-    const r = await window.storage.get('siteInfo', false);
+    const r = await storage.get('siteInfo');
     if(r) siteInfo = JSON.parse(r.value);
   }catch(e){ /* デフォルト値を使用 */ }
 }
 async function saveSiteInfo(){
-  try{ await window.storage.set('siteInfo', JSON.stringify(siteInfo), false); }catch(e){ console.error('siteInfo save failed', e); }
+  try{ await storage.set('siteInfo', JSON.stringify(siteInfo)); }catch(e){ console.error('siteInfo save failed', e); }
 }
 
 async function loadTemplate(){
   try{
-    const r = await window.storage.get('template', false);
+    const r = await storage.get('template');
     TEMPLATE = r ? JSON.parse(r.value) : JSON.parse(JSON.stringify(DEFAULT_TEMPLATE));
   }catch(e){ TEMPLATE = JSON.parse(JSON.stringify(DEFAULT_TEMPLATE)); }
   const changed = migrateTemplate();
   if(changed) await saveTemplate();
 }
 async function saveTemplate(){
-  try{ await window.storage.set('template', JSON.stringify(TEMPLATE), false); }catch(e){ console.error('template save failed', e); }
+  try{ await storage.set('template', JSON.stringify(TEMPLATE)); }catch(e){ console.error('template save failed', e); }
 }
 
 /* ---------------- state / storage ---------------- */
@@ -464,7 +476,7 @@ let photos = []; // {id,kosyu,kotei,item,sokuten,thumb,ts}
 
 async function loadPhotos(){
   try{
-    const r = await window.storage.get('photos', false);
+    const r = await storage.get('photos');
     photos = r ? JSON.parse(r.value) : [];
   }catch(e){ photos = []; }
   let changed = false;
@@ -479,7 +491,7 @@ async function loadPhotos(){
 }
 async function savePhotos(){
   try{
-    await window.storage.set('photos', JSON.stringify(photos), false);
+    await storage.set('photos', JSON.stringify(photos));
   }catch(e){ console.error('storage save failed', e); }
 }
 
