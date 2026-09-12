@@ -312,7 +312,7 @@
       <div class="blackboard">
         <div class="bb-row"><div class="bb-label">工事名</div><div class="bb-fill" id="bbKoji">〇〇マンション新築工事</div></div>
         <div class="bb-row"><div class="bb-label">工種</div><div class="bb-fill editable" id="bbKosyu" data-field="kosyu">-</div><div class="bb-label">測点</div><div class="bb-fill editable" id="bbSokuten" data-field="sokuten">-</div></div>
-        <div class="bb-grid"><div class="bb-item-note editable" id="bbItem" data-field="item">-</div></div>
+        <div class="bb-grid"><div class="bb-item-note editable" id="bbItem" data-field="itemFlow">-</div></div>
         <div class="bb-row"><div class="bb-label">施工会社</div><div class="bb-fill" id="bbCompany">△△建設(株)</div></div>
       </div>
       <div class="camera-controls"><div class="shutter" id="shutterBtn"></div></div>
@@ -639,7 +639,7 @@ const ghostToggle = document.getElementById('ghostToggle');
 const ghostImg = document.getElementById('ghostImg');
 const ghostSliderWrap = document.getElementById('ghostSliderWrap');
 const ghostSlider = document.getElementById('ghostSlider');
-let ghostOn = true;
+let ghostOn = false;
 
 function applyGhostVisibility(){
   const has = ghostImg.dataset.available === '1';
@@ -673,9 +673,13 @@ function openEditSheet(field){
     esTitle.textContent = '測点を入力';
     esBody.innerHTML = `<input type="text" id="esInput" value="${document.getElementById('inSokuten').value}" placeholder="例: 2F 通り X3-Y2">`;
   } else if(field === 'item'){
-    esTitle.textContent = '撮影項目を選択';
+    esTitle.textContent = '撮影項目を選択(2/2)';
     const items = (TEMPLATE[selKosyu.value] && TEMPLATE[selKosyu.value][selChuka.value] && TEMPLATE[selKosyu.value][selChuka.value][selKotei.value]) || [];
     esBody.innerHTML = `<select id="esInput">${items.map(i=>`<option ${i.name===selItem.value?'selected':''}>${i.name}</option>`).join('')}</select>`;
+  } else if(field === 'itemFlow'){
+    esTitle.textContent = '工程を選択(1/2)';
+    const list = ["施工前","施工状況","工程管理","施工完了"];
+    esBody.innerHTML = `<select id="esInput">${list.map(t=>`<option ${t===selKotei.value?'selected':''}>${t}</option>`).join('')}</select>`;
   } else if(field === 'newKosyu'){
     esTitle.textContent = '新しい工種を追加';
     esBody.innerHTML = `<input type="text" id="esInput" placeholder="例: 防水工事">`;
@@ -737,6 +741,10 @@ esOk.addEventListener('click', async ()=>{
     selItem.value = val;
     closeEditSheet();
     updateBlackboard(); updateRemainChip(); await updateGhost(); applyGhostVisibility();
+  } else if(editingField === 'itemFlow'){
+    selKotei.value = val;
+    refreshItemOptions();
+    openEditSheet('item');
   } else if(editingField === 'newKosyu'){
     const name = val.trim();
     closeEditSheet();
