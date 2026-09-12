@@ -537,7 +537,7 @@ document.querySelectorAll('.tabbtn').forEach(btn=>{
     document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById(btn.dataset.view).classList.add('active');
-    if(btn.dataset.view === 'v2'){ startCamera(); updateBlackboard(); }
+    if(btn.dataset.view === 'v2'){ startCamera(); updateBlackboard(); updateGhost().then(applyGhostVisibility); updateRemainChip(); }
     else stopCamera();
     if(btn.dataset.view === 'v3') renderChecklist();
     if(btn.dataset.view === 'v4') renderTemplateEditor();
@@ -587,6 +587,7 @@ document.getElementById('goCamera').addEventListener('click', async ()=>{
   document.querySelector('.tabbtn[data-view="v2"]').click();
   updateBlackboard();
   await updateGhost();
+  applyGhostVisibility();
   updateRemainChip();
 });
 
