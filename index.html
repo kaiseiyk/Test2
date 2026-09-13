@@ -100,6 +100,12 @@
     background:#fff;display:flex;align-items:center;justify-content:center;
     color:var(--steel);font-size:18px;font-weight:700;
   }
+  .cals-toggle{
+    display:inline-block;padding:9px 20px;border-radius:20px;
+    font-family:'Zen Kaku Gothic New',sans-serif;font-weight:700;font-size:13px;
+    cursor:pointer;background:var(--concrete-2);color:var(--steel-dark);
+  }
+  .cals-toggle.on{background:var(--asphalt);color:var(--amber);}
 
   /* ---- 撮影タブ ---- */
   .camwrap{flex:1;position:relative;background:#111;min-height:420px;}
@@ -130,12 +136,21 @@
   .blackboard{
     position:absolute;left:12px;bottom:84px;width:220px;
     background:#2f6b45;border:4px solid #cfc6a8;border-radius:2px;
-    box-shadow:0 8px 18px rgba(0,0,0,.5);font-family:'Zen Kaku Gothic New',sans-serif;overflow:hidden;
+    box-shadow:0 8px 18px rgba(0,0,0,.5);font-family:'Zen Kaku Gothic New',sans-serif;overflow:visible;
     touch-action:none;user-select:none;transition:box-shadow .15s;
+    transform-origin:top left;
   }
   .blackboard.dragging{
     box-shadow:0 0 0 3px var(--amber), 0 12px 26px rgba(0,0,0,.6);
     opacity:.92;
+  }
+  .bb-inner{overflow:hidden;border-radius:1px;}
+  .bb-resize-handle{
+    position:absolute;right:-14px;bottom:-14px;width:26px;height:26px;
+    background:var(--amber);border:2px solid #fff;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    font-size:12px;color:#231a05;cursor:nwse-resize;touch-action:none;
+    box-shadow:0 2px 6px rgba(0,0,0,.4);
   }
   .bb-row{display:flex;border-bottom:2px solid var(--bb-line, #fff);}
   .bb-row:last-child{border-bottom:none;}
@@ -230,6 +245,17 @@
   .check-title{font-size:13px;font-weight:500;}
   .check-sub{font-size:10.5px;color:var(--steel);margin-top:1px;}
   .del-btn{font-size:11px;color:var(--red);font-weight:700;font-family:'Zen Kaku Gothic New',sans-serif;cursor:pointer;flex-shrink:0;}
+  .rep-btn{
+    font-size:11px;font-weight:700;font-family:'Zen Kaku Gothic New',sans-serif;
+    cursor:pointer;flex-shrink:0;padding:4px 9px;border-radius:12px;margin-right:8px;
+    background:var(--concrete-2);color:var(--steel);
+  }
+  .rep-btn.on{background:#fef3e0;color:var(--amber-dim);}
+  .cals-export-btn{
+    margin:6px 16px 20px;text-align:center;padding:13px;border-radius:12px;
+    font-family:'Zen Kaku Gothic New',sans-serif;font-weight:700;font-size:13.5px;
+    color:var(--asphalt);background:#fef3e0;border:1px solid #f0d9a8;cursor:pointer;
+  }
   .empty-note{padding:24px 16px;text-align:center;color:var(--steel);font-size:12.5px;}
 
   /* ---- テンプレート編集タブ ---- */
@@ -280,13 +306,13 @@
 
   <!-- 設定 -->
   <div class="view active" id="v1">
-    <div class="topbar"><div class="ttl">撮影条件を設定</div><div class="sub">工種・中科目・工程・項目・測点を選んでください</div></div>
+    <div class="topbar"><div class="ttl">撮影条件を設定</div><div class="sub" id="v1Sub">工種・中科目・工程・項目・測点を選んでください</div></div>
     <div class="field">
       <label>工種</label>
       <select id="selKosyu"></select>
     </div>
     <div class="field">
-      <label>中科目</label>
+      <label id="lblChuka">中科目</label>
       <select id="selChuka"></select>
     </div>
     <div class="field">
@@ -294,7 +320,7 @@
       <select id="selKotei"><option selected>施工前</option><option>施工状況</option><option>工程管理</option><option>施工完了</option></select>
     </div>
     <div class="field">
-      <label>撮影項目(必須ショット)</label>
+      <label id="lblItem">撮影項目(必須ショット)</label>
       <select id="selItem"></select>
     </div>
     <div class="field">
@@ -319,11 +345,14 @@
         <div class="sv">濃さ</div>
         <input type="range" class="ghost-slider" id="ghostSlider" min="0" max="100" value="55">
       </div>
-      <div class="blackboard">
-        <div class="bb-row"><div class="bb-label">工事名</div><div class="bb-fill" id="bbKoji">〇〇マンション新築工事</div></div>
-        <div class="bb-row"><div class="bb-label">工種</div><div class="bb-fill editable" id="bbKosyu" data-field="kosyu">-</div><div class="bb-label">測点</div><div class="bb-fill editable" id="bbSokuten" data-field="sokuten">-</div></div>
-        <div class="bb-grid"><div class="bb-item-note editable" id="bbItem" data-field="itemFlow">-</div></div>
-        <div class="bb-row"><div class="bb-label">施工会社</div><div class="bb-fill" id="bbCompany">△△建設(株)</div></div>
+      <div class="blackboard" id="blackboardEl">
+        <div class="bb-inner">
+          <div class="bb-row"><div class="bb-label">工事名</div><div class="bb-fill" id="bbKoji">〇〇マンション新築工事</div></div>
+          <div class="bb-row"><div class="bb-label">工種</div><div class="bb-fill editable" id="bbKosyu" data-field="kosyu">-</div><div class="bb-label">測点</div><div class="bb-fill editable" id="bbSokuten" data-field="sokuten">-</div></div>
+          <div class="bb-grid"><div class="bb-item-note editable" id="bbItem" data-field="itemFlow">-</div></div>
+          <div class="bb-row"><div class="bb-label">施工会社</div><div class="bb-fill" id="bbCompany">△△建設(株)</div></div>
+        </div>
+        <div class="bb-resize-handle" id="bbResizeHandle">⤡</div>
       </div>
       <div class="camera-controls"><div class="shutter" id="shutterBtn"></div></div>
       <div class="toast" id="toast">保存しました</div>
@@ -364,7 +393,7 @@
 
   <!-- テンプレート編集 -->
   <div class="view" id="v4">
-    <div class="topbar"><div class="ttl">工種テンプレート編集</div><div class="sub">工種→中科目ごとに工程・必須ショットを設定します</div></div>
+    <div class="topbar"><div class="ttl">工種テンプレート編集</div><div class="sub" id="v4Sub">工種→中科目ごとに工程・必須ショットを設定します</div></div>
     <div class="kosyu-pills" id="tmplPills"></div>
     <div id="tmplRenameKosyu"></div>
     <div class="kosyu-pills" id="tmplChukaPills" style="padding-top:0;"></div>
@@ -386,6 +415,11 @@
     <div class="field">
       <label>黒板の色</label>
       <div class="color-swatches" id="boardColorSwatches"></div>
+    </div>
+    <div class="field">
+      <label>CALSモード</label>
+      <div class="cals-toggle" id="calsToggle">OFF</div>
+      <div class="hint" style="padding:8px 0 0;">ONにすると、「中科目」「項目」の呼び方が国交省CALS/EC電子納品基準に準じて「種別」「細別」に変わり、③チェックリストから電子納品用の簡易データを書き出せるようになります(参考用の簡易出力で、正式な電子納品フォーマットの完全な代替ではありません)。</div>
     </div>
     <div class="hint" style="padding-top:6px;">入力すると自動で保存され、②撮影画面の電子黒板にすぐ反映されます。</div>
   </div>
@@ -461,11 +495,13 @@ function migrateTemplate(){
 }
 
 /* ---------------- 現場情報(工事名・施工会社) ---------------- */
-let siteInfo = { koji: "〇〇マンション新築工事", company: "△△建設(株)", boardColor: "#2f6b45" };
+let siteInfo = { koji: "〇〇マンション新築工事", company: "△△建設(株)", boardColor: "#2f6b45", boardScale: 1, calsMode: false };
+function chukaLabel(){ return siteInfo.calsMode ? '種別' : '中科目'; }
+function itemLabel(){ return siteInfo.calsMode ? '細別' : '項目'; }
 async function loadSiteInfo(){
   try{
     const r = await storage.get('siteInfo');
-    if(r) siteInfo = Object.assign({ koji: "〇〇マンション新築工事", company: "△△建設(株)", boardColor: "#2f6b45" }, JSON.parse(r.value));
+    if(r) siteInfo = Object.assign({ koji: "〇〇マンション新築工事", company: "△△建設(株)", boardColor: "#2f6b45", boardScale: 1, calsMode: false }, JSON.parse(r.value));
   }catch(e){ /* デフォルト値を使用 */ }
 }
 async function saveSiteInfo(){
@@ -618,10 +654,33 @@ function renderBoardColorSwatches(){
   });
 }
 
+function renderCalsToggle(){
+  const el = document.getElementById('calsToggle');
+  el.textContent = siteInfo.calsMode ? 'ON' : 'OFF';
+  el.classList.toggle('on', siteInfo.calsMode);
+}
+
+function applyCalsLabels(){
+  document.getElementById('lblChuka').textContent = chukaLabel();
+  document.getElementById('lblItem').textContent = siteInfo.calsMode ? `撮影${itemLabel()}(必須ショット)` : '撮影項目(必須ショット)';
+  document.getElementById('v4Sub').textContent = `工種→${chukaLabel()}ごとに工程・必須ショットを設定します`;
+  document.getElementById('v1Sub').textContent = `工種・${chukaLabel()}・工程・${itemLabel()}・測点を選んでください`;
+  if(document.getElementById('v4').classList.contains('active')) renderTemplateEditor();
+  if(document.getElementById('v3').classList.contains('active')) renderChecklist(false, false);
+}
+
+document.getElementById('calsToggle').addEventListener('click', async ()=>{
+  siteInfo.calsMode = !siteInfo.calsMode;
+  await saveSiteInfo();
+  renderCalsToggle();
+  applyCalsLabels();
+});
+
 function renderSiteInfoForm(){
   document.getElementById('inKoji').value = siteInfo.koji;
   document.getElementById('inCompany').value = siteInfo.company;
   renderBoardColorSwatches();
+  renderCalsToggle();
 }
 document.getElementById('inKoji').addEventListener('change', async (e)=>{
   siteInfo.koji = e.target.value.trim() || siteInfo.koji;
@@ -756,7 +815,7 @@ function openEditSheet(field){
       `<input type="text" id="esInputNew" placeholder="例: 防水工事" style="display:none;margin-top:10px;">`;
     setupSelectWithNew();
   } else if(field === 'chuka'){
-    esTitle.textContent = '中科目を選択';
+    esTitle.textContent = chukaLabel() + 'を選択';
     const list = chukaList(selKosyu.value);
     esBody.innerHTML = `<select id="esInput">${list.map(c=>`<option ${c===selChuka.value?'selected':''}>${c}</option>`).join('')}</select>`;
   } else if(field === 'sokuten'){
@@ -770,10 +829,10 @@ function openEditSheet(field){
     if(list.length === 0){ document.getElementById('esInput').value = '__new__'; }
     setupSelectWithNew();
   } else if(field === 'item'){
-    esTitle.textContent = '撮影項目を選択(2/2)';
+    esTitle.textContent = itemLabel() + 'を選択(2/2)';
     const items = (TEMPLATE[selKosyu.value] && TEMPLATE[selKosyu.value][selChuka.value] && TEMPLATE[selKosyu.value][selChuka.value][selKotei.value]) || [];
     esBody.innerHTML =
-      `<select id="esInput">${items.map(i=>`<option ${i.name===selItem.value?'selected':''}>${i.name}</option>`).join('')}<option value="__new__">＋ 新しい項目を入力</option></select>` +
+      `<select id="esInput">${items.map(i=>`<option ${i.name===selItem.value?'selected':''}>${i.name}</option>`).join('')}<option value="__new__">＋ 新しい${itemLabel()}を入力</option></select>` +
       `<input type="text" id="esInputNew" placeholder="例: 全景写真" style="display:none;margin-top:10px;">`;
     if(items.length === 0){ document.getElementById('esInput').value = '__new__'; }
     setupSelectWithNew();
@@ -786,14 +845,14 @@ function openEditSheet(field){
     esBody.innerHTML = `<input type="text" id="esInput" placeholder="例: 防水工事">`;
   } else if(field === 'deleteKosyu'){
     esTitle.textContent = '工種を削除しますか?';
-    esBody.innerHTML = `<div style="font-size:13px;color:var(--steel-dark);line-height:1.6;margin-bottom:2px;">「${tmplSelectedKosyu}」を削除すると、配下の中科目・施工前・施工状況・工程管理・施工完了の項目もすべて削除されます。この操作は元に戻せません。</div>`;
+    esBody.innerHTML = `<div style="font-size:13px;color:var(--steel-dark);line-height:1.6;margin-bottom:2px;">「${tmplSelectedKosyu}」を削除すると、配下の${chukaLabel()}・施工前・施工状況・工程管理・施工完了の項目もすべて削除されます。この操作は元に戻せません。</div>`;
     esOk.textContent = '削除する';
     esOk.classList.add('danger');
   } else if(field === 'newChuka'){
-    esTitle.textContent = '新しい中科目を追加';
+    esTitle.textContent = '新しい' + chukaLabel() + 'を追加';
     esBody.innerHTML = `<input type="text" id="esInput" placeholder="例: 柱">`;
   } else if(field === 'deleteChuka'){
-    esTitle.textContent = '中科目を削除しますか?';
+    esTitle.textContent = chukaLabel() + 'を削除しますか?';
     esBody.innerHTML = `<div style="font-size:13px;color:var(--steel-dark);line-height:1.6;margin-bottom:2px;">「${tmplSelectedChuka}」を削除すると、設定した施工前・施工状況・工程管理・施工完了の項目もすべて削除されます。この操作は元に戻せません。</div>`;
     esOk.textContent = '削除する';
     esOk.classList.add('danger');
@@ -801,7 +860,7 @@ function openEditSheet(field){
     esTitle.textContent = '工種名を変更';
     esBody.innerHTML = `<input type="text" id="esInput" value="${tmplSelectedKosyu}">`;
   } else if(field === 'renameChuka'){
-    esTitle.textContent = '中科目名を変更';
+    esTitle.textContent = chukaLabel() + '名を変更';
     esBody.innerHTML = `<input type="text" id="esInput" value="${tmplSelectedChuka}">`;
   }
   editBackdrop.classList.add('show');
@@ -1039,6 +1098,44 @@ function endDrag(e){
 blackboardEl.addEventListener('pointerup', endDrag);
 blackboardEl.addEventListener('pointercancel', endDrag);
 
+/* ---------------- 黒板のリサイズ(右下ハンドルをドラッグ) ---------------- */
+let boardScale = 1;
+let resizing = false;
+let rStartX = 0, rStartY = 0, rStartScale = 1;
+const resizeHandle = document.getElementById('bbResizeHandle');
+
+function applyBoardScale(){
+  boardScale = siteInfo.boardScale || 1;
+  blackboardEl.style.transform = `scale(${boardScale})`;
+}
+
+resizeHandle.addEventListener('pointerdown', (e)=>{
+  e.stopPropagation();
+  resizing = true;
+  rStartX = e.clientX; rStartY = e.clientY;
+  rStartScale = boardScale;
+  resizeHandle.setPointerCapture(e.pointerId);
+});
+resizeHandle.addEventListener('pointermove', (e)=>{
+  e.stopPropagation();
+  if(!resizing) return;
+  const dx = e.clientX - rStartX;
+  const dy = e.clientY - rStartY;
+  const delta = (dx + dy) / 2;
+  boardScale = clamp(rStartScale + delta/150, 0.6, 1.8);
+  blackboardEl.style.transform = `scale(${boardScale})`;
+});
+async function endResize(e){
+  e.stopPropagation();
+  if(resizing){
+    resizing = false;
+    siteInfo.boardScale = boardScale;
+    await saveSiteInfo();
+  }
+}
+resizeHandle.addEventListener('pointerup', endResize);
+resizeHandle.addEventListener('pointercancel', endResize);
+
 /* ---------------- 撮影(シャッター) ---------------- */
 const toast = document.getElementById('toast');
 document.getElementById('shutterBtn').addEventListener('click', async ()=>{
@@ -1055,7 +1152,7 @@ document.getElementById('shutterBtn').addEventListener('click', async ()=>{
   photos.push({
     id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
     kosyu: s.kosyu, chuka: s.chuka, kotei: s.kotei, item: s.item, sokuten: s.sokuten,
-    thumb, ts: Date.now()
+    thumb, ts: Date.now(), isRepresentative: false
   });
   await savePhotos();
   updateRemainChip();
@@ -1102,7 +1199,7 @@ function renderChecklist(resetChuka, resetSokuten){
   body.innerHTML = '';
 
   if(!chuka){
-    body.innerHTML = '<div class="empty-note">この工種にはまだ中科目がありません。④テンプレート編集から追加できます。</div>';
+    body.innerHTML = `<div class="empty-note">この工種にはまだ${chukaLabel()}がありません。④テンプレート編集から追加できます。</div>`;
     document.getElementById('cntOk').textContent = 0;
     document.getElementById('cntNg').textContent = 0;
     document.getElementById('cntAll').textContent = 0;
@@ -1129,6 +1226,7 @@ function renderChecklist(resetChuka, resetSokuten){
             <div class="check-title">${item.name}</div>
             <div class="check-sub">${match ? (sokFilter === '__all__' ? `測点: ${match.sokuten||'(未入力)'} ・ ` : '') + new Date(match.ts).toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) + ' 撮影' : '未撮影'}</div>
           </div>
+          ${match && siteInfo.calsMode ? `<div class="rep-btn ${match.isRepresentative?'on':''}" data-rep-id="${match.id}">${match.isRepresentative?'★代表':'代表'}</div>` : ''}
           ${match ? `<div class="del-btn" data-id="${match.id}">削除</div>` : ''}
         </div>`;
     });
@@ -1136,9 +1234,13 @@ function renderChecklist(resetChuka, resetSokuten){
   });
 
   if(totalReq===0){
-    body.innerHTML = '<div class="empty-note">この工種・中科目の必須テンプレートが未設定です。④テンプレート編集から追加できます。</div>';
+    body.innerHTML = `<div class="empty-note">この工種・${chukaLabel()}の必須テンプレートが未設定です。④テンプレート編集から追加できます。</div>`;
   } else if(sokList.length===0){
-    body.innerHTML = '<div class="empty-note">まだこの工種・中科目の撮影データがありません。②撮影で測点を入力して撮影すると、ここで測点ごとに確認できます。</div>' + body.innerHTML;
+    body.innerHTML = `<div class="empty-note">まだこの工種・${chukaLabel()}の撮影データがありません。②撮影で測点を入力して撮影すると、ここで測点ごとに確認できます。</div>` + body.innerHTML;
+  }
+
+  if(siteInfo.calsMode && totalReq > 0){
+    body.innerHTML += `<div class="cals-export-btn" id="calsExportBtn">CALS用データを書き出す(JSON)</div>`;
   }
 
   document.getElementById('cntOk').textContent = totalOk;
@@ -1156,6 +1258,46 @@ function renderChecklist(resetChuka, resetSokuten){
       updateRemainChip();
     });
   });
+  document.querySelectorAll('.rep-btn').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const p = photos.find(p=>p.id === btn.dataset.repId);
+      if(p){
+        p.isRepresentative = !p.isRepresentative;
+        await savePhotos();
+        renderChecklist(false, false);
+      }
+    });
+  });
+  const exportBtn = document.getElementById('calsExportBtn');
+  if(exportBtn){
+    exportBtn.addEventListener('click', ()=> exportCalsData(k, chuka));
+  }
+}
+
+/* CALS/EC デジタル写真管理情報基準を参考にした簡易書き出し(参考用・正式フォーマットの完全な代替ではありません) */
+function exportCalsData(kosyu, chuka){
+  const records = photos
+    .filter(p => p.kosyu===kosyu && p.chuka===chuka)
+    .map(p => ({
+      工事名: siteInfo.koji,
+      施工会社: siteInfo.company,
+      工種: p.kosyu,
+      種別: p.chuka,
+      細別: p.item,
+      工程区分: p.kotei,
+      測点_撮影箇所: p.sokuten || '',
+      撮影年月日: new Date(p.ts).toLocaleDateString('ja-JP'),
+      代表写真: p.isRepresentative ? '1' : '0'
+    }));
+  const blob = new Blob([JSON.stringify(records, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `CALS_写真管理_${kosyu}_${chuka}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 /* ---------------- テンプレート編集 ---------------- */
@@ -1195,7 +1337,7 @@ function renderTemplateEditor(){
 
   chukaPillsEl.innerHTML = chukaOpts.map(c=>
     `<div class="pill ${c===tmplSelectedChuka?'active':''}" data-c="${c}">${c}</div>`
-  ).join('') + `<div class="pill add" id="tmplAddChuka">＋ 中科目を追加</div>`;
+  ).join('') + `<div class="pill add" id="tmplAddChuka">＋ ${chukaLabel()}を追加</div>`;
 
   chukaPillsEl.querySelectorAll('.pill[data-c]').forEach(p=>{
     p.addEventListener('click', ()=>{ tmplSelectedChuka = p.dataset.c; renderTemplateEditor(); });
@@ -1204,7 +1346,7 @@ function renderTemplateEditor(){
 
   if(!tmplSelectedChuka){
     renameChukaEl.innerHTML = '';
-    body.innerHTML = '<div class="empty-note">この工種にはまだ中科目がありません。上の「＋ 中科目を追加」から作成してください。</div>' +
+    body.innerHTML = `<div class="empty-note">この工種にはまだ${chukaLabel()}がありません。上の「＋ ${chukaLabel()}を追加」から作成してください。</div>` +
       `<div class="danger-btn" id="tmplDeleteKosyu">「${tmplSelectedKosyu}」(工種)を削除</div>`;
     const delK0 = document.getElementById('tmplDeleteKosyu');
     if(delK0) delK0.addEventListener('click', ()=> openEditSheet('deleteKosyu'));
@@ -1233,7 +1375,7 @@ function renderTemplateEditor(){
         ${linked ? '' : `<div class="add-shot-row" data-proc="${proc}">＋ ショット項目を追加</div>`}
       </div>`;
   }).join('') + `<div class="hint" style="padding:0 16px 24px;">変更は自動保存され、①設定・②撮影・③チェックリストにすぐ反映されます。「工程管理」の項目名は「施工状況」と連動しますが、必須/任意は個別に設定できます。</div>` +
-    `<div class="danger-btn" id="tmplDeleteChuka">「${tmplSelectedChuka}」(中科目)を削除</div>` +
+    `<div class="danger-btn" id="tmplDeleteChuka">「${tmplSelectedChuka}」(${chukaLabel()})を削除</div>` +
     `<div class="danger-btn" id="tmplDeleteKosyu">「${tmplSelectedKosyu}」(工種)を削除</div>`;
 
   body.querySelectorAll('.shot-input:not([readonly])').forEach(inp=>{
@@ -1336,6 +1478,8 @@ if('serviceWorker' in navigator){
 (async function init(){
   await loadSiteInfo();
   applyBoardColor();
+  applyBoardScale();
+  applyCalsLabels();
   await loadTemplate();
   refreshKosyuSelects();
   refreshSetupChuka();
