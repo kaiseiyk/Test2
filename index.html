@@ -165,10 +165,6 @@
       repeating-linear-gradient(90deg, var(--bb-grid-line, rgba(255,255,255,0.4)) 0 1px, transparent 1px 15px);}
 
   /* 黒板の縦横プロポーションをボタンで手動切り替え */
-  .blackboard.wide{ width:320px; }
-  .blackboard.wide .bb-grid{ height:44px; }
-  .blackboard.wide .bb-label{ font-size:11.5px; }
-  .blackboard.wide .bb-fill{ font-size:10px; }
   .bb-item-note{
     position:absolute;top:6px;left:6px;right:6px;
     color:var(--bb-text, #fff);font-weight:700;font-size:12px;
@@ -348,7 +344,7 @@
         <div class="chip" id="remainChip">残り -</div>
       </div>
       <div class="shot-chip" style="top:48px;right:auto;">
-        <div class="chip" id="boardShapeToggle">📐 黒板: 縦長</div>
+        <div class="chip" id="boardRotateToggle">🔄 黒板: 縦向き</div>
       </div>
       <div class="ghost-slider-wrap" id="ghostSliderWrap">
         <div class="sv">濃さ</div>
@@ -504,13 +500,13 @@ function migrateTemplate(){
 }
 
 /* ---------------- 現場情報(工事名・施工会社) ---------------- */
-let siteInfo = { koji: "〇〇マンション新築工事", company: "△△建設(株)", boardColor: "#2f6b45", boardScale: 1, boardWide: false, calsMode: false };
+let siteInfo = { koji: "〇〇マンション新築工事", company: "△△建設(株)", boardColor: "#2f6b45", boardScale: 1, boardRotated: false, calsMode: false };
 function chukaLabel(){ return siteInfo.calsMode ? '種別' : '中科目'; }
 function itemLabel(){ return siteInfo.calsMode ? '細別' : '項目'; }
 async function loadSiteInfo(){
   try{
     const r = await storage.get('siteInfo');
-    if(r) siteInfo = Object.assign({ koji: "〇〇マンション新築工事", company: "△△建設(株)", boardColor: "#2f6b45", boardScale: 1, boardWide: false, calsMode: false }, JSON.parse(r.value));
+    if(r) siteInfo = Object.assign({ koji: "〇〇マンション新築工事", company: "△△建設(株)", boardColor: "#2f6b45", boardScale: 1, boardRotated: false, calsMode: false }, JSON.parse(r.value));
   }catch(e){ /* デフォルト値を使用 */ }
 }
 async function saveSiteInfo(){
@@ -1107,27 +1103,32 @@ function endDrag(e){
 blackboardEl.addEventListener('pointerup', endDrag);
 blackboardEl.addEventListener('pointercancel', endDrag);
 
-/* ---------------- 黒板のリサイズ(右下ハンドルをドラッグ) ---------------- */
+/* ---------------- 黒板のリサイズ(右下ハンドルをドラッグ)・回転 ---------------- */
 let boardScale = 1;
 let resizing = false;
 let rStartX = 0, rStartY = 0, rStartScale = 1;
 const resizeHandle = document.getElementById('bbResizeHandle');
 
+function applyBoardTransform(){
+  const rot = siteInfo.boardRotated ? 90 : 0;
+  blackboardEl.style.transform = `scale(${boardScale}) rotate(${rot}deg)`;
+}
 function applyBoardScale(){
   boardScale = siteInfo.boardScale || 1;
-  blackboardEl.style.transform = `scale(${boardScale})`;
+  applyBoardTransform();
 }
 
-/* ---------------- 黒板の縦長/横長をボタンで切り替え ---------------- */
-function applyBoardShape(){
-  blackboardEl.classList.toggle('wide', !!siteInfo.boardWide);
-  const btn = document.getElementById('boardShapeToggle');
-  if(btn) btn.textContent = siteInfo.boardWide ? '📐 黒板: 横長' : '📐 黒板: 縦長';
+/* ---------------- 黒板を90度回転(文字ごと回転) ---------------- */
+function applyBoardRotation(){
+  const btn = document.getElementById('boardRotateToggle');
+  if(btn) btn.textContent = siteInfo.boardRotated ? '🔄 黒板: 横向き' : '🔄 黒板: 縦向き';
+  applyBoardTransform();
+  setTimeout(reclampBoardPosition, 50);
 }
-document.getElementById('boardShapeToggle').addEventListener('click', async ()=>{
-  siteInfo.boardWide = !siteInfo.boardWide;
+document.getElementById('boardRotateToggle').addEventListener('click', async ()=>{
+  siteInfo.boardRotated = !siteInfo.boardRotated;
   await saveSiteInfo();
-  applyBoardShape();
+  applyBoardRotation();
 });
 
 resizeHandle.addEventListener('pointerdown', (e)=>{
@@ -1144,7 +1145,7 @@ resizeHandle.addEventListener('pointermove', (e)=>{
   const dy = e.clientY - rStartY;
   const delta = (dx + dy) / 2;
   boardScale = clamp(rStartScale + delta/150, 0.6, 1.8);
-  blackboardEl.style.transform = `scale(${boardScale})`;
+  applyBoardTransform();
 });
 async function endResize(e){
   e.stopPropagation();
@@ -1159,8 +1160,7 @@ resizeHandle.addEventListener('pointercancel', endResize);
 
 /* ---------------- 画面回転時に黒板が画面外に出ないよう位置を再調整 ---------------- */
 function reclampBoardPosition(){
-  // style.left/topで自由配置されている場合のみ再調整(まだ動かしていなければ何もしない)
-  if(!blackboardEl.style.left && !blackboardEl.style.top) return;
+  if(!blackboardEl.style.left && !blackboardEl.style.top) bbToTopLeft();
   const wrapRect = camwrapEl.getBoundingClientRect();
   const bbRect = blackboardEl.getBoundingClientRect();
   if(wrapRect.width === 0 || wrapRect.height === 0) return;
@@ -1517,7 +1517,7 @@ if('serviceWorker' in navigator){
   await loadSiteInfo();
   applyBoardColor();
   applyBoardScale();
-  applyBoardShape();
+  applyBoardRotation();
   applyCalsLabels();
   await loadTemplate();
   refreshKosyuSelects();
