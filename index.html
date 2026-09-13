@@ -163,6 +163,12 @@
   .bb-grid{height:64px;position:relative;background-image:
       repeating-linear-gradient(0deg, var(--bb-grid-line, rgba(255,255,255,0.4)) 0 1px, transparent 1px 15px),
       repeating-linear-gradient(90deg, var(--bb-grid-line, rgba(255,255,255,0.4)) 0 1px, transparent 1px 15px);}
+
+  /* 黒板の縦横プロポーションをボタンで手動切り替え */
+  .blackboard.wide{ width:320px; }
+  .blackboard.wide .bb-grid{ height:44px; }
+  .blackboard.wide .bb-label{ font-size:11.5px; }
+  .blackboard.wide .bb-fill{ font-size:10px; }
   .bb-item-note{
     position:absolute;top:6px;left:6px;right:6px;
     color:var(--bb-text, #fff);font-weight:700;font-size:12px;
@@ -341,6 +347,9 @@
         <div class="chip" id="ghostToggle"><span class="dot"></span>ゴースト表示</div>
         <div class="chip" id="remainChip">残り -</div>
       </div>
+      <div class="shot-chip" style="top:48px;right:auto;">
+        <div class="chip" id="boardShapeToggle">📐 黒板: 縦長</div>
+      </div>
       <div class="ghost-slider-wrap" id="ghostSliderWrap">
         <div class="sv">濃さ</div>
         <input type="range" class="ghost-slider" id="ghostSlider" min="0" max="100" value="55">
@@ -495,13 +504,13 @@ function migrateTemplate(){
 }
 
 /* ---------------- 現場情報(工事名・施工会社) ---------------- */
-let siteInfo = { koji: "〇〇マンション新築工事", company: "△△建設(株)", boardColor: "#2f6b45", boardScale: 1, calsMode: false };
+let siteInfo = { koji: "〇〇マンション新築工事", company: "△△建設(株)", boardColor: "#2f6b45", boardScale: 1, boardWide: false, calsMode: false };
 function chukaLabel(){ return siteInfo.calsMode ? '種別' : '中科目'; }
 function itemLabel(){ return siteInfo.calsMode ? '細別' : '項目'; }
 async function loadSiteInfo(){
   try{
     const r = await storage.get('siteInfo');
-    if(r) siteInfo = Object.assign({ koji: "〇〇マンション新築工事", company: "△△建設(株)", boardColor: "#2f6b45", boardScale: 1, calsMode: false }, JSON.parse(r.value));
+    if(r) siteInfo = Object.assign({ koji: "〇〇マンション新築工事", company: "△△建設(株)", boardColor: "#2f6b45", boardScale: 1, boardWide: false, calsMode: false }, JSON.parse(r.value));
   }catch(e){ /* デフォルト値を使用 */ }
 }
 async function saveSiteInfo(){
@@ -1109,6 +1118,18 @@ function applyBoardScale(){
   blackboardEl.style.transform = `scale(${boardScale})`;
 }
 
+/* ---------------- 黒板の縦長/横長をボタンで切り替え ---------------- */
+function applyBoardShape(){
+  blackboardEl.classList.toggle('wide', !!siteInfo.boardWide);
+  const btn = document.getElementById('boardShapeToggle');
+  if(btn) btn.textContent = siteInfo.boardWide ? '📐 黒板: 横長' : '📐 黒板: 縦長';
+}
+document.getElementById('boardShapeToggle').addEventListener('click', async ()=>{
+  siteInfo.boardWide = !siteInfo.boardWide;
+  await saveSiteInfo();
+  applyBoardShape();
+});
+
 resizeHandle.addEventListener('pointerdown', (e)=>{
   e.stopPropagation();
   resizing = true;
@@ -1496,6 +1517,7 @@ if('serviceWorker' in navigator){
   await loadSiteInfo();
   applyBoardColor();
   applyBoardScale();
+  applyBoardShape();
   applyCalsLabels();
   await loadTemplate();
   refreshKosyuSelects();
