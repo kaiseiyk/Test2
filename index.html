@@ -108,7 +108,7 @@
   .cals-toggle.on{background:var(--asphalt);color:var(--amber);}
 
   /* ---- 撮影タブ ---- */
-  .camwrap{flex:1;position:relative;background:#111;min-height:420px;}
+  .camwrap{flex:1;position:relative;background:#111;min-height:280px;}
   #video{width:100%;height:100%;object-fit:cover;display:block;background:#000;}
   #camMsg{
     position:absolute;inset:0;display:none;align-items:center;justify-content:center;
@@ -1135,6 +1135,23 @@ async function endResize(e){
 }
 resizeHandle.addEventListener('pointerup', endResize);
 resizeHandle.addEventListener('pointercancel', endResize);
+
+/* ---------------- 画面回転時に黒板が画面外に出ないよう位置を再調整 ---------------- */
+function reclampBoardPosition(){
+  // style.left/topで自由配置されている場合のみ再調整(まだ動かしていなければ何もしない)
+  if(!blackboardEl.style.left && !blackboardEl.style.top) return;
+  const wrapRect = camwrapEl.getBoundingClientRect();
+  const bbRect = blackboardEl.getBoundingClientRect();
+  if(wrapRect.width === 0 || wrapRect.height === 0) return;
+  const curLeft = parseFloat(blackboardEl.style.left) || 0;
+  const curTop = parseFloat(blackboardEl.style.top) || 0;
+  const maxLeft = Math.max(0, wrapRect.width - bbRect.width);
+  const maxTop = Math.max(0, wrapRect.height - bbRect.height);
+  blackboardEl.style.left = clamp(curLeft, 0, maxLeft) + 'px';
+  blackboardEl.style.top = clamp(curTop, 0, maxTop) + 'px';
+}
+window.addEventListener('resize', ()=> setTimeout(reclampBoardPosition, 150));
+window.addEventListener('orientationchange', ()=> setTimeout(reclampBoardPosition, 300));
 
 /* ---------------- 撮影(シャッター) ---------------- */
 const toast = document.getElementById('toast');
