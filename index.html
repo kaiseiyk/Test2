@@ -260,6 +260,34 @@
   }
   .empty-note{padding:24px 16px;text-align:center;color:var(--steel);font-size:12.5px;}
 
+  /* ---- 台帳(印刷/PDF) ---- */
+  .ledger-page{
+    background:#fff;color:#20232a;padding:14px;margin:0 16px 16px;
+    border:1px solid var(--line);border-radius:6px;
+  }
+  .ledger-header{text-align:center;margin-bottom:10px;border-bottom:2px solid #20232a;padding-bottom:8px;}
+  .ledger-header .lh-title{font-family:'Zen Kaku Gothic New',sans-serif;font-weight:700;font-size:14px;}
+  .ledger-header .lh-sub{font-size:10.5px;color:var(--steel);margin-top:3px;}
+  .ledger-header .lh-page{font-size:9.5px;color:var(--steel);margin-top:3px;}
+  .ledger-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .ledger-cell{border:1px solid var(--line);border-radius:5px;overflow:hidden;background:#fff;}
+  .ledger-cell img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block;background:#eee;}
+  .ledger-cell .lc-cap{padding:5px 7px;font-size:9px;line-height:1.55;}
+  .ledger-cell .lc-cap b{font-weight:700;}
+  .ledger-empty-cell{border:1px dashed var(--line);border-radius:5px;}
+
+  @media print{
+    body > *:not(#app){ display:none !important; }
+    #app > *:not(#v6){ display:none !important; }
+    .tabs, .install-banner{ display:none !important; }
+    #v6 > *:not(#ledgerPreview){ display:none !important; }
+    #v6{ display:block !important; height:auto; }
+    #ledgerPreview{ display:block !important; }
+    .ledger-page{ margin:0; border:none; border-radius:0; page-break-after:always; }
+    .ledger-page:last-child{ page-break-after:auto; }
+    @page{ size:A4; margin:12mm; }
+  }
+
   /* ---- テンプレート編集タブ ---- */
   .kosyu-pills{display:flex;flex-wrap:wrap;gap:8px;padding:14px 16px 10px;}
   .pill{
@@ -304,6 +332,7 @@
     <div class="tabbtn" data-view="v3">③ チェックリスト</div>
     <div class="tabbtn" data-view="v4">④ テンプレート編集</div>
     <div class="tabbtn" data-view="v5">⑤ 現場情報</div>
+    <div class="tabbtn" data-view="v6">⑥ 台帳</div>
   </div>
 
   <!-- 設定 -->
@@ -427,6 +456,20 @@
       <div class="hint" style="padding:8px 0 0;">ONにすると、「中科目」「項目」の呼び方が国交省CALS/EC電子納品基準に準じて「種別」「細別」に変わり、③チェックリストから電子納品用の簡易データを書き出せるようになります(参考用の簡易出力で、正式な電子納品フォーマットの完全な代替ではありません)。</div>
     </div>
     <div class="hint" style="padding-top:6px;">入力すると自動で保存され、②撮影画面の電子黒板にすぐ反映されます。</div>
+  </div>
+
+  <!-- 台帳 -->
+  <div class="view" id="v6">
+    <div class="topbar"><div class="ttl">工事写真台帳</div><div class="sub">撮影した写真を台帳形式にまとめます</div></div>
+    <div class="field" style="padding-bottom:10px;">
+      <select id="ledgerKosyu"></select>
+    </div>
+    <div class="field" style="padding-bottom:10px;">
+      <select id="ledgerChuka"></select>
+    </div>
+    <div class="primary-btn" id="ledgerPrintBtn" style="margin-top:6px;">この台帳を印刷 / PDF保存</div>
+    <div class="hint" style="padding-bottom:10px;">下のプレビューがそのまま印刷されます。スマホの印刷メニューから「PDFに保存」を選べば、そのままPDFの写真台帳として書き出せます。</div>
+    <div id="ledgerPreview"></div>
   </div>
 
 </div>
@@ -597,6 +640,7 @@ document.querySelectorAll('.tabbtn').forEach(btn=>{
     if(btn.dataset.view === 'v3') renderChecklist();
     if(btn.dataset.view === 'v4') renderTemplateEditor();
     if(btn.dataset.view === 'v5') renderSiteInfoForm();
+    if(btn.dataset.view === 'v6') renderLedger();
   });
 });
 
@@ -699,6 +743,82 @@ document.getElementById('inCompany').addEventListener('change', async (e)=>{
   await saveSiteInfo();
   updateBlackboard();
 });
+
+/* ---------------- 台帳(印刷/PDF) ---------------- */
+const ledgerKosyuSel = document.getElementById('ledgerKosyu');
+const ledgerChukaSel = document.getElementById('ledgerChuka');
+const PHOTOS_PER_PAGE = 4;
+const KOTEI_ORDER = ["施工前","施工状況","工程管理","施工完了"];
+
+function refreshLedgerSelects(resetChuka){
+  const cur1 = ledgerKosyuSel.value;
+  ledgerKosyuSel.innerHTML = kosyuList().map(k=>`<option>${k}</option>`).join('');
+  if(kosyuList().includes(cur1)) ledgerKosyuSel.value = cur1;
+  const k = ledgerKosyuSel.value;
+  const cur2 = ledgerChukaSel.value;
+  const cList = chukaList(k);
+  ledgerChukaSel.innerHTML = cList.map(c=>`<option>${c}</option>`).join('');
+  if(!resetChuka && cList.includes(cur2)) ledgerChukaSel.value = cur2;
+  else ledgerChukaSel.value = cList[0] || '';
+}
+ledgerKosyuSel.addEventListener('change', ()=>{ refreshLedgerSelects(true); renderLedger(); });
+ledgerChukaSel.addEventListener('change', renderLedger);
+document.getElementById('ledgerPrintBtn').addEventListener('click', ()=> window.print());
+
+function renderLedger(){
+  refreshLedgerSelects(false);
+  const k = ledgerKosyuSel.value;
+  const c = ledgerChukaSel.value;
+  const preview = document.getElementById('ledgerPreview');
+
+  if(!k || !c){
+    preview.innerHTML = '<div class="empty-note">工種・中科目を選択してください。まだ撮影データが無い場合はここに表示されません。</div>';
+    return;
+  }
+
+  const list = photos
+    .filter(p => p.kosyu===k && p.chuka===c)
+    .sort((a,b)=>{
+      const oa = KOTEI_ORDER.indexOf(a.kotei), ob = KOTEI_ORDER.indexOf(b.kotei);
+      if(oa !== ob) return oa - ob;
+      return a.ts - b.ts;
+    });
+
+  if(list.length === 0){
+    preview.innerHTML = '<div class="empty-note">この工種・中科目にはまだ撮影した写真がありません。</div>';
+    return;
+  }
+
+  const pages = [];
+  for(let i=0; i<list.length; i+=PHOTOS_PER_PAGE){
+    pages.push(list.slice(i, i+PHOTOS_PER_PAGE));
+  }
+
+  preview.innerHTML = pages.map((pagePhotos, pi)=>{
+    const cells = pagePhotos.map(p => `
+      <div class="ledger-cell">
+        <img src="${p.thumb}">
+        <div class="lc-cap">
+          <b>${p.item}</b><br>
+          工種: ${p.kosyu} / ${chukaLabel()}: ${p.chuka}<br>
+          工程: ${p.kotei} ／ 測点: ${p.sokuten || '(未入力)'}<br>
+          撮影日: ${new Date(p.ts).toLocaleDateString('ja-JP')}
+        </div>
+      </div>`).join('');
+    const blanks = PHOTOS_PER_PAGE - pagePhotos.length;
+    const blankCells = Array.from({length: Math.max(0, blanks)}).map(()=>`<div class="ledger-empty-cell"></div>`).join('');
+    return `
+      <div class="ledger-page">
+        <div class="ledger-header">
+          <div class="lh-title">工事写真台帳</div>
+          <div class="lh-sub">${siteInfo.koji} ／ 施工会社: ${siteInfo.company}</div>
+          <div class="lh-sub">工種: ${k} ／ ${chukaLabel()}: ${c}</div>
+          <div class="lh-page">${pi+1} / ${pages.length} ページ</div>
+        </div>
+        <div class="ledger-grid">${cells}${blankCells}</div>
+      </div>`;
+  }).join('');
+}
 
 /* ---------------- camera ---------------- */
 const video = document.getElementById('video');
@@ -1110,19 +1230,39 @@ let rStartX = 0, rStartY = 0, rStartScale = 1;
 const resizeHandle = document.getElementById('bbResizeHandle');
 
 function applyBoardTransform(){
-  const rot = siteInfo.boardRotated ? 90 : 0;
-  blackboardEl.style.transform = `scale(${boardScale}) rotate(${rot}deg)`;
+  blackboardEl.style.transform = `scale(${boardScale})`;
 }
 function applyBoardScale(){
   boardScale = siteInfo.boardScale || 1;
   applyBoardTransform();
 }
 
-/* ---------------- 黒板を90度回転(文字ごと回転) ---------------- */
+/* ---------------- 黒板を90度回転(文字ごと回転)
+   外枠(.blackboard)は動かさず、footprint(幅高さ)だけ回転後の形に入れ替え、
+   中身(.bb-inner)だけを回転させることで、画面外へ飛び出さないようにする ---------------- */
 function applyBoardRotation(){
   const btn = document.getElementById('boardRotateToggle');
-  if(btn) btn.textContent = siteInfo.boardRotated ? '🔄 黒板: 横向き' : '🔄 黒板: 縦向き';
-  applyBoardTransform();
+  const inner = blackboardEl.querySelector('.bb-inner');
+  if(siteInfo.boardRotated){
+    if(btn) btn.textContent = '🔄 黒板: 横向き';
+    if(!inner.style.width){
+      // 回転前(自然な状態)の実寸を測ってから入れ替える
+      const w = inner.offsetWidth, h = inner.offsetHeight;
+      inner.style.width = w + 'px';
+      inner.style.height = h + 'px';
+      blackboardEl.style.width = h + 'px';
+      blackboardEl.style.height = w + 'px';
+    }
+    inner.style.transformOrigin = 'top left';
+    inner.style.transform = 'rotate(90deg) translateY(-100%)';
+  } else {
+    if(btn) btn.textContent = '🔄 黒板: 縦向き';
+    inner.style.transform = '';
+    inner.style.width = '';
+    inner.style.height = '';
+    blackboardEl.style.width = '';
+    blackboardEl.style.height = '';
+  }
   setTimeout(reclampBoardPosition, 50);
 }
 document.getElementById('boardRotateToggle').addEventListener('click', async ()=>{
