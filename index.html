@@ -133,6 +133,20 @@
   .ghost-slider-wrap .sv{font-size:8.5px;color:#cfd3d6;margin-bottom:5px;font-family:'Zen Kaku Gothic New',sans-serif;}
   .ghost-slider{writing-mode:vertical-lr;direction:rtl;width:4px;height:56px;accent-color:var(--amber);}
 
+  .zoom-wrap{
+    position:absolute;right:12px;bottom:96px;display:none;flex-direction:column;
+    align-items:center;background:rgba(15,16,18,.7);border-radius:16px;padding:8px 6px;
+    z-index:5;
+  }
+  .zoom-wrap .zv{font-size:8.5px;color:#cfd3d6;margin-bottom:5px;font-family:'Zen Kaku Gothic New',sans-serif;}
+  .zoom-slider{writing-mode:vertical-lr;direction:rtl;width:4px;height:70px;accent-color:var(--amber);}
+  .zoom-wrap .zlabel{font-size:8.5px;color:#fff;margin-top:5px;font-family:'Zen Kaku Gothic New',sans-serif;}
+  .zoom-unsupported{
+    position:absolute;right:12px;bottom:96px;
+    background:rgba(15,16,18,.7);color:#cfd3d6;font-size:9px;
+    padding:6px 9px;border-radius:12px;max-width:100px;line-height:1.4;display:none;
+  }
+
   .blackboard{
     position:absolute;left:12px;bottom:84px;width:220px;
     background:#2f6b45;border:4px solid #cfc6a8;border-radius:2px;
@@ -410,11 +424,18 @@
       </div>
       <div class="shot-chip" style="top:48px;right:auto;">
         <div class="chip" id="boardRotateToggle">🔄 黒板: 縦向き</div>
+        <div class="chip" id="burnBoardToggle" style="margin-left:8px;"><span class="dot"></span>写真に黒板を残す</div>
       </div>
       <div class="ghost-slider-wrap" id="ghostSliderWrap">
         <div class="sv">濃さ</div>
         <input type="range" class="ghost-slider" id="ghostSlider" min="0" max="100" value="55">
       </div>
+      <div class="zoom-wrap" id="zoomWrap">
+        <div class="zv">ズーム</div>
+        <input type="range" class="zoom-slider" id="zoomSlider" min="0" max="100" value="0">
+        <div class="zlabel" id="zoomLabel">1.0x</div>
+      </div>
+      <div class="zoom-unsupported" id="zoomUnsupported">この端末/ブラウザはズーム操作に対応していません</div>
       <div class="blackboard" id="blackboardEl">
         <div class="bb-inner">
           <div class="bb-row"><div class="bb-label">工事名</div><div class="bb-fill" id="bbKoji">〇〇マンション新築工事</div></div>
@@ -595,13 +616,13 @@ function migrateTemplate(){
 }
 
 /* ---------------- 現場情報(工事名・施工会社) ---------------- */
-let siteInfo = { koji: "〇〇マンション新築工事", company: "△△建設(株)", boardColor: "#2f6b45", boardScale: 1, boardRotated: false, calsMode: false, ledgerPerPage: "3" };
+let siteInfo = { koji: "〇〇マンション新築工事", company: "△△建設(株)", boardColor: "#2f6b45", boardScale: 1, boardRotated: true, calsMode: false, ledgerPerPage: "3", burnBoard: true };
 function chukaLabel(){ return siteInfo.calsMode ? '種別' : '中科目'; }
 function itemLabel(){ return siteInfo.calsMode ? '細別' : '項目'; }
 async function loadSiteInfo(){
   try{
     const r = await storage.get('siteInfo');
-    if(r) siteInfo = Object.assign({ koji: "〇〇マンション新築工事", company: "△△建設(株)", boardColor: "#2f6b45", boardScale: 1, boardRotated: false, calsMode: false, ledgerPerPage: "3" }, JSON.parse(r.value));
+    if(r) siteInfo = Object.assign({ koji: "〇〇マンション新築工事", company: "△△建設(株)", boardColor: "#2f6b45", boardScale: 1, boardRotated: true, calsMode: false, ledgerPerPage: "3", burnBoard: true }, JSON.parse(r.value));
   }catch(e){ /* デフォルト値を使用 */ }
 }
 async function saveSiteInfo(){
@@ -960,6 +981,7 @@ async function startCamera(){
   try{
     stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' }, audio:false });
     video.srcObject = stream;
+    setupZoom();
   }catch(e){
     camMsg.style.display = 'flex';
     camMsg.textContent = 'カメラにアクセスできませんでした。ブラウザのカメラ権限を許可するか、HTTPSで開いた状態でお試しください。(' + e.message + ')';
@@ -967,6 +989,44 @@ async function startCamera(){
 }
 function stopCamera(){
   if(stream){ stream.getTracks().forEach(t=>t.stop()); stream = null; }
+  zoomWrap.style.display = 'none';
+  zoomUnsupported.style.display = 'none';
+}
+
+/* ---------------- ズーム(対応端末のみ) ---------------- */
+const zoomWrap = document.getElementById('zoomWrap');
+const zoomSlider = document.getElementById('zoomSlider');
+const zoomLabel = document.getElementById('zoomLabel');
+const zoomUnsupported = document.getElementById('zoomUnsupported');
+
+function setupZoom(){
+  zoomWrap.style.display = 'none';
+  zoomUnsupported.style.display = 'none';
+  const track = stream && stream.getVideoTracks ? stream.getVideoTracks()[0] : null;
+  if(!track || !track.getCapabilities){
+    zoomUnsupported.style.display = 'block';
+    return;
+  }
+  const caps = track.getCapabilities();
+  if(!caps.zoom || caps.zoom.min === caps.zoom.max){
+    zoomUnsupported.style.display = 'block';
+    return;
+  }
+  zoomSlider.min = caps.zoom.min;
+  zoomSlider.max = caps.zoom.max;
+  zoomSlider.step = caps.zoom.step || 0.1;
+  const settings = track.getSettings ? track.getSettings() : {};
+  const initial = settings.zoom || caps.zoom.min;
+  zoomSlider.value = initial;
+  zoomLabel.textContent = (Math.round(initial*10)/10) + 'x';
+  zoomWrap.style.display = 'flex';
+
+  zoomSlider.oninput = async ()=>{
+    const v = parseFloat(zoomSlider.value);
+    zoomLabel.textContent = (Math.round(v*10)/10) + 'x';
+    try{ await track.applyConstraints({ advanced: [{ zoom: v }] }); }
+    catch(e){ /* 一部端末でズーム変更に失敗しても無視 */ }
+  };
 }
 
 /* ---------------- 撮影画面: 黒板 / ゴースト反映 ---------------- */
@@ -1401,6 +1461,82 @@ document.getElementById('boardRotateToggle').addEventListener('click', async ()=
   applyBoardRotation();
 });
 
+/* ---------------- 写真に黒板を焼き込むかどうかのトグル ---------------- */
+const burnBoardToggle = document.getElementById('burnBoardToggle');
+function applyBurnBoardToggle(){
+  burnBoardToggle.classList.toggle('off', !siteInfo.burnBoard);
+}
+burnBoardToggle.addEventListener('click', async ()=>{
+  siteInfo.burnBoard = !siteInfo.burnBoard;
+  await saveSiteInfo();
+  applyBurnBoardToggle();
+});
+
+/* ---------------- 撮影した写真のキャンバスに黒板を焼き込む(簡易版・実寸に合わせて再描画) ---------------- */
+function truncateToWidth(ctx, text, maxW){
+  if(ctx.measureText(text).width <= maxW) return text;
+  let t = text;
+  while(t.length > 1 && ctx.measureText(t + '…').width > maxW){ t = t.slice(0, -1); }
+  return t + '…';
+}
+
+function drawBlackboardOnCanvas(ctx, canvas, vw, vh){
+  const wrapRect = camwrapEl.getBoundingClientRect();
+  const bbRect = blackboardEl.getBoundingClientRect();
+  if(wrapRect.width === 0 || wrapRect.height === 0 || vw === 0 || vh === 0) return;
+
+  // object-fit:cover のズレを補正して、画面上の黒板位置を実際の映像フレーム座標に変換
+  const coverScale = Math.max(wrapRect.width / vw, wrapRect.height / vh);
+  const renderedW = vw * coverScale, renderedH = vh * coverScale;
+  const offsetX = (renderedW - wrapRect.width) / 2;
+  const offsetY = (renderedH - wrapRect.height) / 2;
+  const sx = bbRect.left - wrapRect.left;
+  const sy = bbRect.top - wrapRect.top;
+  const vx1 = (sx + offsetX) / coverScale, vy1 = (sy + offsetY) / coverScale;
+  const vx2 = (sx + bbRect.width + offsetX) / coverScale, vy2 = (sy + bbRect.height + offsetY) / coverScale;
+  const scaleX = canvas.width / vw, scaleY = canvas.height / vh;
+  const bx = vx1 * scaleX, by = vy1 * scaleY;
+  const bw = (vx2 - vx1) * scaleX, bh = (vy2 - vy1) * scaleY;
+  if(bw <= 2 || bh <= 2) return;
+
+  const s = currentSelection();
+  const isLight = relativeLuminance(siteInfo.boardColor) > 0.5;
+  const textColor = isLight ? '#20232a' : '#ffffff';
+  const lineColor = isLight ? 'rgba(0,0,0,.35)' : 'rgba(255,255,255,.6)';
+
+  ctx.save();
+  ctx.fillStyle = siteInfo.boardColor;
+  ctx.fillRect(bx, by, bw, bh);
+  ctx.strokeStyle = '#cfc6a8';
+  ctx.lineWidth = Math.max(1, bh * 0.02);
+  ctx.strokeRect(bx, by, bw, bh);
+
+  const rowH = bh / 4;
+  ctx.strokeStyle = lineColor;
+  ctx.lineWidth = Math.max(1, bh * 0.008);
+  for(let i=1; i<4; i++){
+    ctx.beginPath();
+    ctx.moveTo(bx, by + rowH*i);
+    ctx.lineTo(bx + bw, by + rowH*i);
+    ctx.stroke();
+  }
+
+  const fontSize = Math.max(7, rowH * 0.4);
+  ctx.fillStyle = textColor;
+  ctx.font = `bold ${fontSize}px sans-serif`;
+  ctx.textBaseline = 'middle';
+  const pad = bw * 0.03;
+  const half = bw / 2;
+
+  ctx.fillText(truncateToWidth(ctx, siteInfo.koji, bw - pad*2), bx + pad, by + rowH*0.5);
+  ctx.fillText(truncateToWidth(ctx, '工種:' + s.kosyu, half - pad*2), bx + pad, by + rowH*1.5);
+  ctx.fillText(truncateToWidth(ctx, '測点:' + s.sokuten, half - pad*2), bx + half + pad, by + rowH*1.5);
+  ctx.fillText(truncateToWidth(ctx, `${chukaLabel()}:${s.chuka} / ${itemLabel()}:${s.item}`, bw - pad*2), bx + pad, by + rowH*2.5);
+  ctx.fillText(truncateToWidth(ctx, '施工会社:' + siteInfo.company, bw - pad*2), bx + pad, by + rowH*3.5);
+
+  ctx.restore();
+}
+
 resizeHandle.addEventListener('pointerdown', (e)=>{
   e.stopPropagation();
   resizing = true;
@@ -1430,7 +1566,9 @@ resizeHandle.addEventListener('pointercancel', endResize);
 
 /* ---------------- 画面回転時に黒板が画面外に出ないよう位置を再調整 ---------------- */
 function reclampBoardPosition(){
-  if(!blackboardEl.style.left && !blackboardEl.style.top) bbToTopLeft();
+  // まだ一度もドラッグで動かしていない場合は、bottom基準のデフォルト位置のままにしておく
+  // (top基準に変換すると回転・リサイズのたびに左下からズレてしまうため)
+  if(!blackboardEl.style.left && !blackboardEl.style.top) return;
   const wrapRect = camwrapEl.getBoundingClientRect();
   const bbRect = blackboardEl.getBoundingClientRect();
   if(wrapRect.width === 0 || wrapRect.height === 0) return;
@@ -1454,7 +1592,9 @@ document.getElementById('shutterBtn').addEventListener('click', async ()=>{
   const targetW = 480;
   canvas.width = targetW;
   canvas.height = Math.round(vh * (targetW / vw));
-  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  if(siteInfo.burnBoard) drawBlackboardOnCanvas(ctx, canvas, vw, vh);
   const thumb = canvas.toDataURL('image/jpeg', 0.6);
 
   photos.push({
@@ -1788,6 +1928,7 @@ if('serviceWorker' in navigator){
   applyBoardColor();
   applyBoardScale();
   applyBoardRotation();
+  applyBurnBoardToggle();
   applyCalsLabels();
   await loadTemplate();
   refreshKosyuSelects();

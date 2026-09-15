@@ -1,4 +1,4 @@
-const CACHE_NAME = 'koji-shashin-cache-v20';
+const CACHE_NAME = 'koji-shashin-cache-v22';
 const CORE_ASSETS = [
   './',
   './manifest.json',
