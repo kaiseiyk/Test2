@@ -260,7 +260,7 @@
   }
   .empty-note{padding:24px 16px;text-align:center;color:var(--steel);font-size:12.5px;}
 
-  /* ---- 台帳(印刷/PDF) ---- */
+  /* ---- 台帳(印刷/PDF): 写真+右側キャプションの行形式(蔵衛門等の一般的な工事写真台帳に近い形) ---- */
   .ledger-page{
     background:#fff;color:#20232a;padding:14px;margin:0 16px 16px;
     border:1px solid var(--line);border-radius:6px;
@@ -269,12 +269,48 @@
   .ledger-header .lh-title{font-family:'Zen Kaku Gothic New',sans-serif;font-weight:700;font-size:14px;}
   .ledger-header .lh-sub{font-size:10.5px;color:var(--steel);margin-top:3px;}
   .ledger-header .lh-page{font-size:9.5px;color:var(--steel);margin-top:3px;}
-  .ledger-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-  .ledger-cell{border:1px solid var(--line);border-radius:5px;overflow:hidden;background:#fff;}
-  .ledger-cell img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block;background:#eee;}
-  .ledger-cell .lc-cap{padding:5px 7px;font-size:9px;line-height:1.55;}
-  .ledger-cell .lc-cap b{font-weight:700;}
-  .ledger-empty-cell{border:1px dashed var(--line);border-radius:5px;}
+  .ledger-rows{display:flex;flex-direction:column;gap:8px;}
+  .ledger-row{display:flex;border:1px solid var(--line);border-radius:5px;overflow:hidden;background:#fff;}
+  .ledger-photo{position:relative;width:52%;flex-shrink:0;background:#eee;}
+  .ledger-photo img{width:100%;height:100%;object-fit:cover;display:block;aspect-ratio:4/3;}
+  .ledger-mini-board{
+    position:absolute;left:4%;bottom:4%;width:58%;
+    background:#2f6b45;border:1.5px solid #cfc6a8;color:#fff;
+    font-size:5.5px;line-height:1.5;padding:2px 3px;
+  }
+  .ledger-mini-board .mb-row{display:flex;border-bottom:1px solid rgba(255,255,255,.5);}
+  .ledger-mini-board .mb-row:last-child{border-bottom:none;}
+  .ledger-mini-board .mb-k{width:26%;flex-shrink:0;border-right:1px solid rgba(255,255,255,.5);padding:1px 2px;}
+  .ledger-mini-board .mb-v{flex:1;padding:1px 2px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+  .ledger-cap{flex:1;padding:8px 10px;font-size:9.5px;line-height:1.85;min-width:0;}
+  .ledger-cap .cap-title{
+    font-weight:700;font-size:10.5px;margin-bottom:6px;
+    border-bottom:1px solid var(--line);padding-bottom:5px;
+  }
+  .ledger-cap .cap-line b{display:inline-block;min-width:5.5em;color:var(--steel);font-weight:500;}
+  .ledger-empty-row{border:1px dashed var(--line);border-radius:5px;flex:1;min-height:70px;}
+
+  .picker-actions{display:flex;gap:14px;padding:2px 0 8px;}
+  .picker-link{font-size:11.5px;color:var(--steel-dark);text-decoration:underline;cursor:pointer;}
+  .ledger-picker{display:flex;flex-wrap:wrap;gap:8px;}
+  .picker-tile{
+    position:relative;width:64px;height:64px;border-radius:8px;overflow:hidden;
+    cursor:pointer;border:2px solid var(--line);flex-shrink:0;
+  }
+  .picker-tile img{width:100%;height:100%;object-fit:cover;display:block;}
+  .picker-tile .pt-cap{
+    position:absolute;left:0;right:0;bottom:0;background:rgba(15,16,18,.72);
+    color:#fff;font-size:7.5px;padding:2px 3px;line-height:1.25;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .picker-tile .pt-check{
+    position:absolute;top:3px;right:3px;width:16px;height:16px;border-radius:50%;
+    background:rgba(255,255,255,.85);border:1.5px solid var(--steel);
+    display:flex;align-items:center;justify-content:center;font-size:10px;color:transparent;
+  }
+  .picker-tile.selected{border-color:var(--amber);}
+  .picker-tile.selected .pt-check{background:var(--amber);border-color:var(--amber);color:#231a05;}
+  .picker-tile.unselected{opacity:.45;}
 
   @media print{
     body > *:not(#app){ display:none !important; }
@@ -467,6 +503,22 @@
     <div class="field" style="padding-bottom:10px;">
       <select id="ledgerChuka"></select>
     </div>
+    <div class="field" style="padding-bottom:10px;">
+      <select id="ledgerPerPage">
+        <option value="2">1ページに2枚</option>
+        <option value="3" selected>1ページに3枚</option>
+        <option value="4">1ページに4枚</option>
+        <option value="6">1ページに6枚</option>
+      </select>
+    </div>
+    <div class="field" style="padding-bottom:6px;">
+      <label>使う写真を選択</label>
+      <div class="picker-actions">
+        <div class="picker-link" id="pickerSelectAll">すべて選択</div>
+        <div class="picker-link" id="pickerSelectNone">すべて解除</div>
+      </div>
+      <div class="ledger-picker" id="ledgerPicker"></div>
+    </div>
     <div class="primary-btn" id="ledgerPrintBtn" style="margin-top:6px;">この台帳を印刷 / PDF保存</div>
     <div class="hint" style="padding-bottom:10px;">下のプレビューがそのまま印刷されます。スマホの印刷メニューから「PDFに保存」を選べば、そのままPDFの写真台帳として書き出せます。</div>
     <div id="ledgerPreview"></div>
@@ -543,13 +595,13 @@ function migrateTemplate(){
 }
 
 /* ---------------- 現場情報(工事名・施工会社) ---------------- */
-let siteInfo = { koji: "〇〇マンション新築工事", company: "△△建設(株)", boardColor: "#2f6b45", boardScale: 1, boardRotated: false, calsMode: false };
+let siteInfo = { koji: "〇〇マンション新築工事", company: "△△建設(株)", boardColor: "#2f6b45", boardScale: 1, boardRotated: false, calsMode: false, ledgerPerPage: "3" };
 function chukaLabel(){ return siteInfo.calsMode ? '種別' : '中科目'; }
 function itemLabel(){ return siteInfo.calsMode ? '細別' : '項目'; }
 async function loadSiteInfo(){
   try{
     const r = await storage.get('siteInfo');
-    if(r) siteInfo = Object.assign({ koji: "〇〇マンション新築工事", company: "△△建設(株)", boardColor: "#2f6b45", boardScale: 1, boardRotated: false, calsMode: false }, JSON.parse(r.value));
+    if(r) siteInfo = Object.assign({ koji: "〇〇マンション新築工事", company: "△△建設(株)", boardColor: "#2f6b45", boardScale: 1, boardRotated: false, calsMode: false, ledgerPerPage: "3" }, JSON.parse(r.value));
   }catch(e){ /* デフォルト値を使用 */ }
 }
 async function saveSiteInfo(){
@@ -747,8 +799,10 @@ document.getElementById('inCompany').addEventListener('change', async (e)=>{
 /* ---------------- 台帳(印刷/PDF) ---------------- */
 const ledgerKosyuSel = document.getElementById('ledgerKosyu');
 const ledgerChukaSel = document.getElementById('ledgerChuka');
-const PHOTOS_PER_PAGE = 4;
+const ledgerPerPageSel = document.getElementById('ledgerPerPage');
 const KOTEI_ORDER = ["施工前","施工状況","工程管理","施工完了"];
+let ledgerSelectedIds = new Set();
+let ledgerLastKey = '';
 
 function refreshLedgerSelects(resetChuka){
   const cur1 = ledgerKosyuSel.value;
@@ -763,10 +817,74 @@ function refreshLedgerSelects(resetChuka){
 }
 ledgerKosyuSel.addEventListener('change', ()=>{ refreshLedgerSelects(true); renderLedger(); });
 ledgerChukaSel.addEventListener('change', renderLedger);
+ledgerPerPageSel.addEventListener('change', async ()=>{
+  siteInfo.ledgerPerPage = ledgerPerPageSel.value;
+  await saveSiteInfo();
+  renderLedgerPages();
+});
 document.getElementById('ledgerPrintBtn').addEventListener('click', ()=> window.print());
+document.getElementById('pickerSelectAll').addEventListener('click', ()=>{
+  ledgerCandidates().forEach(p=> ledgerSelectedIds.add(p.id));
+  renderLedgerPicker();
+  renderLedgerPages();
+});
+document.getElementById('pickerSelectNone').addEventListener('click', ()=>{
+  ledgerSelectedIds.clear();
+  renderLedgerPicker();
+  renderLedgerPages();
+});
 
-function renderLedger(){
-  refreshLedgerSelects(false);
+function ledgerCandidates(){
+  const k = ledgerKosyuSel.value, c = ledgerChukaSel.value;
+  return photos
+    .filter(p => p.kosyu===k && p.chuka===c)
+    .sort((a,b)=>{
+      const oa = KOTEI_ORDER.indexOf(a.kotei), ob = KOTEI_ORDER.indexOf(b.kotei);
+      if(oa !== ob) return oa - ob;
+      return a.ts - b.ts;
+    });
+}
+
+function renderLedgerPicker(){
+  const picker = document.getElementById('ledgerPicker');
+  const list = ledgerCandidates();
+  if(list.length === 0){
+    picker.innerHTML = '<div class="empty-note" style="padding:12px 0;">この工種・中科目にはまだ撮影した写真がありません。</div>';
+    return;
+  }
+  picker.innerHTML = list.map(p=>{
+    const sel = ledgerSelectedIds.has(p.id);
+    return `
+      <div class="picker-tile ${sel?'selected':'unselected'}" data-id="${p.id}">
+        <img src="${p.thumb}">
+        <div class="pt-check">✓</div>
+        <div class="pt-cap">${p.kotei}</div>
+      </div>`;
+  }).join('');
+  picker.querySelectorAll('.picker-tile').forEach(tile=>{
+    tile.addEventListener('click', ()=>{
+      const id = tile.dataset.id;
+      if(ledgerSelectedIds.has(id)) ledgerSelectedIds.delete(id);
+      else ledgerSelectedIds.add(id);
+      renderLedgerPicker();
+      renderLedgerPages();
+    });
+  });
+}
+
+function miniBoard(p){
+  return `
+    <div class="ledger-mini-board">
+      <div class="mb-row"><div class="mb-k">工事名</div><div class="mb-v">${siteInfo.koji}</div></div>
+      <div class="mb-row"><div class="mb-k">工種</div><div class="mb-v">${p.kosyu}</div></div>
+      <div class="mb-row"><div class="mb-k">${chukaLabel()}</div><div class="mb-v">${p.chuka}</div></div>
+      <div class="mb-row"><div class="mb-k">${itemLabel()}</div><div class="mb-v">${p.item}</div></div>
+    </div>`;
+}
+
+function renderLedgerPages(){
+  if(siteInfo.ledgerPerPage) ledgerPerPageSel.value = siteInfo.ledgerPerPage;
+  const perPage = parseInt(ledgerPerPageSel.value, 10) || 3;
   const k = ledgerKosyuSel.value;
   const c = ledgerChukaSel.value;
   const preview = document.getElementById('ledgerPreview');
@@ -776,37 +894,37 @@ function renderLedger(){
     return;
   }
 
-  const list = photos
-    .filter(p => p.kosyu===k && p.chuka===c)
-    .sort((a,b)=>{
-      const oa = KOTEI_ORDER.indexOf(a.kotei), ob = KOTEI_ORDER.indexOf(b.kotei);
-      if(oa !== ob) return oa - ob;
-      return a.ts - b.ts;
-    });
+  const list = ledgerCandidates().filter(p => ledgerSelectedIds.has(p.id));
 
   if(list.length === 0){
-    preview.innerHTML = '<div class="empty-note">この工種・中科目にはまだ撮影した写真がありません。</div>';
+    preview.innerHTML = '<div class="empty-note">上の一覧から台帳に使う写真を選んでください。</div>';
     return;
   }
 
   const pages = [];
-  for(let i=0; i<list.length; i+=PHOTOS_PER_PAGE){
-    pages.push(list.slice(i, i+PHOTOS_PER_PAGE));
+  for(let i=0; i<list.length; i+=perPage){
+    pages.push(list.slice(i, i+perPage));
   }
 
   preview.innerHTML = pages.map((pagePhotos, pi)=>{
-    const cells = pagePhotos.map(p => `
-      <div class="ledger-cell">
-        <img src="${p.thumb}">
-        <div class="lc-cap">
-          <b>${p.item}</b><br>
-          工種: ${p.kosyu} / ${chukaLabel()}: ${p.chuka}<br>
-          工程: ${p.kotei} ／ 測点: ${p.sokuten || '(未入力)'}<br>
-          撮影日: ${new Date(p.ts).toLocaleDateString('ja-JP')}
+    const rows = pagePhotos.map(p => `
+      <div class="ledger-row">
+        <div class="ledger-photo">
+          <img src="${p.thumb}">
+          ${miniBoard(p)}
+        </div>
+        <div class="ledger-cap">
+          <div class="cap-title">【写真タイトル】${p.item}</div>
+          <div class="cap-line"><b>写真区分</b>${p.kotei}写真</div>
+          <div class="cap-line"><b>工種</b>${p.kosyu}</div>
+          <div class="cap-line"><b>${chukaLabel()}</b>${p.chuka}</div>
+          <div class="cap-line"><b>${itemLabel()}</b>${p.item}</div>
+          <div class="cap-line"><b>測点</b>${p.sokuten || '(未入力)'}</div>
+          <div class="cap-line"><b>撮影年月日</b>${new Date(p.ts).toLocaleDateString('ja-JP')}</div>
         </div>
       </div>`).join('');
-    const blanks = PHOTOS_PER_PAGE - pagePhotos.length;
-    const blankCells = Array.from({length: Math.max(0, blanks)}).map(()=>`<div class="ledger-empty-cell"></div>`).join('');
+    const blanks = perPage - pagePhotos.length;
+    const blankRows = Array.from({length: Math.max(0, blanks)}).map(()=>`<div class="ledger-empty-row"></div>`).join('');
     return `
       <div class="ledger-page">
         <div class="ledger-header">
@@ -815,9 +933,21 @@ function renderLedger(){
           <div class="lh-sub">工種: ${k} ／ ${chukaLabel()}: ${c}</div>
           <div class="lh-page">${pi+1} / ${pages.length} ページ</div>
         </div>
-        <div class="ledger-grid">${cells}${blankCells}</div>
+        <div class="ledger-rows">${rows}${blankRows}</div>
       </div>`;
   }).join('');
+}
+
+function renderLedger(){
+  refreshLedgerSelects(false);
+  const key = ledgerKosyuSel.value + '::' + ledgerChukaSel.value;
+  if(key !== ledgerLastKey){
+    // 工種・中科目の組み合わせが変わったら、その時点の写真を全選択状態にする
+    ledgerSelectedIds = new Set(ledgerCandidates().map(p=>p.id));
+    ledgerLastKey = key;
+  }
+  renderLedgerPicker();
+  renderLedgerPages();
 }
 
 /* ---------------- camera ---------------- */
