@@ -297,11 +297,11 @@
   .ledger-mini-board .mb-k{width:26%;flex-shrink:0;border-right:1px solid rgba(255,255,255,.5);padding:1px 2px;}
   .ledger-mini-board .mb-v{flex:1;padding:1px 2px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
   .ledger-cap{flex:1;padding:8px 10px;font-size:9.5px;line-height:1.85;min-width:0;}
-  .ledger-cap .cap-title{
-    font-weight:700;font-size:10.5px;margin-bottom:6px;
-    border-bottom:1px solid var(--line);padding-bottom:5px;
+  .ledger-cap-text{
+    outline:none;white-space:pre-wrap;word-break:break-word;
+    min-height:100%;border-radius:3px;
   }
-  .ledger-cap .cap-line b{display:inline-block;min-width:5.5em;color:var(--steel);font-weight:500;}
+  .ledger-cap-text:focus{background:#fef3e0;}
   .ledger-empty-row{border:1px dashed var(--line);border-radius:5px;flex:1;min-height:70px;}
 
   .picker-actions{display:flex;gap:14px;padding:2px 0 8px;}
@@ -335,6 +335,7 @@
     #ledgerPreview{ display:block !important; }
     .ledger-page{ margin:0; border:none; border-radius:0; page-break-after:always; }
     .ledger-page:last-child{ page-break-after:auto; }
+    .ledger-cap-text:focus{ background:none; }
     @page{ size:A4; margin:12mm; }
   }
 
@@ -424,7 +425,6 @@
       </div>
       <div class="shot-chip" style="top:48px;right:auto;">
         <div class="chip" id="boardRotateToggle">🔄 黒板: 縦向き</div>
-        <div class="chip" id="burnBoardToggle" style="margin-left:8px;"><span class="dot"></span>写真に黒板を残す</div>
       </div>
       <div class="ghost-slider-wrap" id="ghostSliderWrap">
         <div class="sv">濃さ</div>
@@ -541,7 +541,7 @@
       <div class="ledger-picker" id="ledgerPicker"></div>
     </div>
     <div class="primary-btn" id="ledgerPrintBtn" style="margin-top:6px;">この台帳を印刷 / PDF保存</div>
-    <div class="hint" style="padding-bottom:10px;">下のプレビューがそのまま印刷されます。スマホの印刷メニューから「PDFに保存」を選べば、そのままPDFの写真台帳として書き出せます。</div>
+    <div class="hint" style="padding-bottom:10px;">下のプレビューがそのまま印刷されます。キャプション部分は直接タップして自由に書き換えられます(変更は自動保存されます)。スマホの印刷メニューから「PDFに保存」を選べば、そのままPDFの写真台帳として書き出せます。</div>
     <div id="ledgerPreview"></div>
   </div>
 
@@ -572,7 +572,7 @@ function syncManagementItems(kosyu, chuka){
   const src = node["施工状況"] || [];
   const cur = node["工程管理"] || [];
   node["工程管理"] = src.map((it, i) => ({
-    name: it.name + " 施工完了",
+    name: it.name + " 完了",
     required: cur[i] ? cur[i].required : true
   }));
   if(node["工程管理"].length === 0){
@@ -599,6 +599,13 @@ function migrateTemplate(){
       if(!node["施工前"]) node["施工前"] = [{name:"施工前", required:true}];
       if(!node["施工状況"]) node["施工状況"] = [];
       if(!node["工程管理"]) node["工程管理"] = [];
+      // 「〜 施工完了」という旧い項目名表記を「〜 完了」に統一する
+      node["工程管理"].forEach(item=>{
+        if(/ 施工完了$/.test(item.name)){
+          item.name = item.name.replace(/ 施工完了$/, ' 完了');
+          changed = true;
+        }
+      });
       if(node["工程管理"].length === 0) syncManagementItems(k, c);
       if(!node["施工完了"]) node["施工完了"] = [{name:"施工完了", required:true}];
     });
@@ -616,13 +623,13 @@ function migrateTemplate(){
 }
 
 /* ---------------- 現場情報(工事名・施工会社) ---------------- */
-let siteInfo = { koji: "〇〇マンション新築工事", company: "△△建設(株)", boardColor: "#2f6b45", boardScale: 1, boardRotated: true, calsMode: false, ledgerPerPage: "3", burnBoard: true };
+let siteInfo = { koji: "〇〇マンション新築工事", company: "△△建設(株)", boardColor: "#2f6b45", boardScale: 1, boardRotated: true, calsMode: false, ledgerPerPage: "3" };
 function chukaLabel(){ return siteInfo.calsMode ? '種別' : '中科目'; }
 function itemLabel(){ return siteInfo.calsMode ? '細別' : '項目'; }
 async function loadSiteInfo(){
   try{
     const r = await storage.get('siteInfo');
-    if(r) siteInfo = Object.assign({ koji: "〇〇マンション新築工事", company: "△△建設(株)", boardColor: "#2f6b45", boardScale: 1, boardRotated: true, calsMode: false, ledgerPerPage: "3", burnBoard: true }, JSON.parse(r.value));
+    if(r) siteInfo = Object.assign({ koji: "〇〇マンション新築工事", company: "△△建設(株)", boardColor: "#2f6b45", boardScale: 1, boardRotated: true, calsMode: false, ledgerPerPage: "3" }, JSON.parse(r.value));
   }catch(e){ /* デフォルト値を使用 */ }
 }
 async function saveSiteInfo(){
@@ -927,23 +934,27 @@ function renderLedgerPages(){
     pages.push(list.slice(i, i+perPage));
   }
 
+  function escapeHtml(str){
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+  function defaultCaption(p){
+    return `【写真タイトル】${p.item}\n写真区分: ${p.kotei}写真\n工種: ${p.kosyu}\n${chukaLabel()}: ${p.chuka}\n${itemLabel()}: ${p.item}\n測点: ${p.sokuten || '(未入力)'}\n撮影年月日: ${new Date(p.ts).toLocaleDateString('ja-JP')}`;
+  }
+
   preview.innerHTML = pages.map((pagePhotos, pi)=>{
-    const rows = pagePhotos.map(p => `
+    const rows = pagePhotos.map(p => {
+      const capText = (p.caption !== undefined && p.caption !== null && p.caption !== '') ? p.caption : defaultCaption(p);
+      return `
       <div class="ledger-row">
         <div class="ledger-photo">
           <img src="${p.thumb}">
           ${miniBoard(p)}
         </div>
         <div class="ledger-cap">
-          <div class="cap-title">【写真タイトル】${p.item}</div>
-          <div class="cap-line"><b>写真区分</b>${p.kotei}写真</div>
-          <div class="cap-line"><b>工種</b>${p.kosyu}</div>
-          <div class="cap-line"><b>${chukaLabel()}</b>${p.chuka}</div>
-          <div class="cap-line"><b>${itemLabel()}</b>${p.item}</div>
-          <div class="cap-line"><b>測点</b>${p.sokuten || '(未入力)'}</div>
-          <div class="cap-line"><b>撮影年月日</b>${new Date(p.ts).toLocaleDateString('ja-JP')}</div>
+          <div class="ledger-cap-text" contenteditable="true" data-id="${p.id}">${escapeHtml(capText)}</div>
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
     const blanks = perPage - pagePhotos.length;
     const blankRows = Array.from({length: Math.max(0, blanks)}).map(()=>`<div class="ledger-empty-row"></div>`).join('');
     return `
@@ -957,6 +968,16 @@ function renderLedgerPages(){
         <div class="ledger-rows">${rows}${blankRows}</div>
       </div>`;
   }).join('');
+
+  preview.querySelectorAll('.ledger-cap-text').forEach(el=>{
+    el.addEventListener('blur', async ()=>{
+      const p = photos.find(x=>x.id === el.dataset.id);
+      if(p){
+        p.caption = el.innerText;
+        await savePhotos();
+      }
+    });
+  });
 }
 
 function renderLedger(){
@@ -1461,17 +1482,6 @@ document.getElementById('boardRotateToggle').addEventListener('click', async ()=
   applyBoardRotation();
 });
 
-/* ---------------- 写真に黒板を焼き込むかどうかのトグル ---------------- */
-const burnBoardToggle = document.getElementById('burnBoardToggle');
-function applyBurnBoardToggle(){
-  burnBoardToggle.classList.toggle('off', !siteInfo.burnBoard);
-}
-burnBoardToggle.addEventListener('click', async ()=>{
-  siteInfo.burnBoard = !siteInfo.burnBoard;
-  await saveSiteInfo();
-  applyBurnBoardToggle();
-});
-
 /* ---------------- 撮影した写真のキャンバスに黒板を焼き込む(簡易版・実寸に合わせて再描画) ---------------- */
 function truncateToWidth(ctx, text, maxW){
   if(ctx.measureText(text).width <= maxW) return text;
@@ -1594,7 +1604,7 @@ document.getElementById('shutterBtn').addEventListener('click', async ()=>{
   canvas.height = Math.round(vh * (targetW / vw));
   const ctx = canvas.getContext('2d');
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-  if(siteInfo.burnBoard) drawBlackboardOnCanvas(ctx, canvas, vw, vh);
+  drawBlackboardOnCanvas(ctx, canvas, vw, vh);
   const thumb = canvas.toDataURL('image/jpeg', 0.6);
 
   photos.push({
@@ -1928,7 +1938,6 @@ if('serviceWorker' in navigator){
   applyBoardColor();
   applyBoardScale();
   applyBoardRotation();
-  applyBurnBoardToggle();
   applyCalsLabels();
   await loadTemplate();
   refreshKosyuSelects();
