@@ -465,6 +465,9 @@
   <div class="view" id="v3">
     <div class="topbar"><div class="ttl">撮影漏れチェック</div><div class="sub" id="checklistSub">工種を選んで確認</div></div>
     <div class="field" style="padding-bottom:10px;">
+      <select id="checkKoji"></select>
+    </div>
+    <div class="field" style="padding-bottom:10px;">
       <select id="checkKosyu"></select>
     </div>
     <div class="field" style="padding-bottom:10px;">
@@ -495,6 +498,10 @@
   <!-- 現場情報 -->
   <div class="view" id="v5">
     <div class="topbar"><div class="ttl">現場情報の編集</div><div class="sub">電子黒板の「工事名」「施工会社」「色」を設定します</div></div>
+    <div class="field" id="projectSwitcherField">
+      <label>過去の現場から切り替え</label>
+      <div class="kosyu-pills" id="projectSwitcher" style="padding:6px 0 0;"></div>
+    </div>
     <div class="field">
       <label>工事名</label>
       <input type="text" id="inKoji" placeholder="例: 〇〇マンション新築工事">
@@ -518,6 +525,9 @@
   <!-- 台帳 -->
   <div class="view" id="v6">
     <div class="topbar"><div class="ttl">工事写真台帳</div><div class="sub">撮影した写真を台帳形式にまとめます</div></div>
+    <div class="field" style="padding-bottom:10px;">
+      <select id="ledgerKoji"></select>
+    </div>
     <div class="field" style="padding-bottom:10px;">
       <select id="ledgerKosyu"></select>
     </div>
@@ -636,6 +646,23 @@ async function saveSiteInfo(){
   try{ await storage.set('siteInfo', JSON.stringify(siteInfo)); }catch(e){ console.error('siteInfo save failed', e); }
 }
 
+/* ---------------- 現場(工事名)プロファイル: 過去に使った工事名+施工会社をワンタップで呼び出す ---------------- */
+let projects = {}; // { [工事名]: { company } }
+async function loadProjects(){
+  try{
+    const r = await storage.get('projects');
+    projects = r ? JSON.parse(r.value) : {};
+  }catch(e){ projects = {}; }
+}
+async function saveProjects(){
+  try{ await storage.set('projects', JSON.stringify(projects)); }catch(e){ console.error('projects save failed', e); }
+}
+async function rememberCurrentProject(){
+  if(!siteInfo.koji) return;
+  projects[siteInfo.koji] = { company: siteInfo.company };
+  await saveProjects();
+}
+
 async function loadTemplate(){
   try{
     const r = await storage.get('template');
@@ -664,6 +691,7 @@ async function loadPhotos(){
     if(p.kotei === '工程'){ p.kotei = '施工状況'; changed = true; }
     if(p.kotei === '完了'){ p.kotei = '工程管理'; changed = true; }
     if(!p.chuka){ p.chuka = '共通'; changed = true; }
+    if(!p.koji){ p.koji = siteInfo.koji; changed = true; }
   });
   if(changed) await savePhotos();
 }
@@ -678,9 +706,11 @@ const selKosyu = document.getElementById('selKosyu');
 const selChuka = document.getElementById('selChuka');
 const selKotei = document.getElementById('selKotei');
 const selItem = document.getElementById('selItem');
+const checkKoji = document.getElementById('checkKoji');
 const checkKosyu = document.getElementById('checkKosyu');
 const checkChuka = document.getElementById('checkChuka');
 const checkSokuten = document.getElementById('checkSokuten');
+checkKoji.addEventListener('change', ()=> renderChecklist(true, true));
 
 function refreshKosyuSelects(){
   const cur1 = selKosyu.value, cur2 = checkKosyu.value;
@@ -810,21 +840,50 @@ function renderSiteInfoForm(){
   document.getElementById('inCompany').value = siteInfo.company;
   renderBoardColorSwatches();
   renderCalsToggle();
+  renderProjectSwitcher();
 }
 document.getElementById('inKoji').addEventListener('change', async (e)=>{
   siteInfo.koji = e.target.value.trim() || siteInfo.koji;
   e.target.value = siteInfo.koji;
   await saveSiteInfo();
+  await rememberCurrentProject();
   updateBlackboard();
+  renderProjectSwitcher();
 });
 document.getElementById('inCompany').addEventListener('change', async (e)=>{
   siteInfo.company = e.target.value.trim() || siteInfo.company;
   e.target.value = siteInfo.company;
   await saveSiteInfo();
+  await rememberCurrentProject();
   updateBlackboard();
 });
 
+/* ---------------- 現場切り替えUI ---------------- */
+function renderProjectSwitcher(){
+  const wrap = document.getElementById('projectSwitcher');
+  const names = Object.keys(projects).filter(n => n !== siteInfo.koji);
+  if(names.length === 0){
+    wrap.innerHTML = '';
+    return;
+  }
+  wrap.innerHTML = names.map(n=>
+    `<div class="pill" data-koji="${n}">${n}</div>`
+  ).join('');
+  wrap.querySelectorAll('.pill').forEach(p=>{
+    p.addEventListener('click', async ()=>{
+      const name = p.dataset.koji;
+      const prof = projects[name] || {};
+      siteInfo.koji = name;
+      if(prof.company) siteInfo.company = prof.company;
+      await saveSiteInfo();
+      renderSiteInfoForm();
+      updateBlackboard();
+    });
+  });
+}
+
 /* ---------------- 台帳(印刷/PDF) ---------------- */
+const ledgerKojiSel = document.getElementById('ledgerKoji');
 const ledgerKosyuSel = document.getElementById('ledgerKosyu');
 const ledgerChukaSel = document.getElementById('ledgerChuka');
 const ledgerPerPageSel = document.getElementById('ledgerPerPage');
@@ -833,6 +892,12 @@ let ledgerSelectedIds = new Set();
 let ledgerLastKey = '';
 
 function refreshLedgerSelects(resetChuka){
+  const prevKoji = ledgerKojiSel.value;
+  const kojiOpts = kojiListFromPhotos();
+  ledgerKojiSel.innerHTML = kojiOpts.map(n=>`<option>${n}</option>`).join('');
+  if(kojiOpts.includes(prevKoji)) ledgerKojiSel.value = prevKoji;
+  else if(kojiOpts.includes(siteInfo.koji)) ledgerKojiSel.value = siteInfo.koji;
+
   const cur1 = ledgerKosyuSel.value;
   ledgerKosyuSel.innerHTML = kosyuList().map(k=>`<option>${k}</option>`).join('');
   if(kosyuList().includes(cur1)) ledgerKosyuSel.value = cur1;
@@ -843,6 +908,7 @@ function refreshLedgerSelects(resetChuka){
   if(!resetChuka && cList.includes(cur2)) ledgerChukaSel.value = cur2;
   else ledgerChukaSel.value = cList[0] || '';
 }
+ledgerKojiSel.addEventListener('change', ()=>{ renderLedger(); });
 ledgerKosyuSel.addEventListener('change', ()=>{ refreshLedgerSelects(true); renderLedger(); });
 ledgerChukaSel.addEventListener('change', renderLedger);
 ledgerPerPageSel.addEventListener('change', async ()=>{
@@ -863,9 +929,9 @@ document.getElementById('pickerSelectNone').addEventListener('click', ()=>{
 });
 
 function ledgerCandidates(){
-  const k = ledgerKosyuSel.value, c = ledgerChukaSel.value;
+  const koji = ledgerKojiSel.value, k = ledgerKosyuSel.value, c = ledgerChukaSel.value;
   return photos
-    .filter(p => p.kosyu===k && p.chuka===c)
+    .filter(p => p.koji===koji && p.kosyu===k && p.chuka===c)
     .sort((a,b)=>{
       const oa = KOTEI_ORDER.indexOf(a.kotei), ob = KOTEI_ORDER.indexOf(b.kotei);
       if(oa !== ob) return oa - ob;
@@ -903,7 +969,7 @@ function renderLedgerPicker(){
 function miniBoard(p){
   return `
     <div class="ledger-mini-board">
-      <div class="mb-row"><div class="mb-k">工事名</div><div class="mb-v">${siteInfo.koji}</div></div>
+      <div class="mb-row"><div class="mb-k">工事名</div><div class="mb-v">${p.koji || siteInfo.koji}</div></div>
       <div class="mb-row"><div class="mb-k">工種</div><div class="mb-v">${p.kosyu}</div></div>
       <div class="mb-row"><div class="mb-k">${chukaLabel()}</div><div class="mb-v">${p.chuka}</div></div>
       <div class="mb-row"><div class="mb-k">${itemLabel()}</div><div class="mb-v">${p.item}</div></div>
@@ -915,10 +981,12 @@ function renderLedgerPages(){
   const perPage = parseInt(ledgerPerPageSel.value, 10) || 3;
   const k = ledgerKosyuSel.value;
   const c = ledgerChukaSel.value;
+  const koji = ledgerKojiSel.value;
+  const company = (siteInfo.koji===koji) ? siteInfo.company : ((projects[koji]&&projects[koji].company) || '');
   const preview = document.getElementById('ledgerPreview');
 
-  if(!k || !c){
-    preview.innerHTML = '<div class="empty-note">工種・中科目を選択してください。まだ撮影データが無い場合はここに表示されません。</div>';
+  if(!koji || !k || !c){
+    preview.innerHTML = '<div class="empty-note">工事名・工種・中科目を選択してください。まだ撮影データが無い場合はここに表示されません。</div>';
     return;
   }
 
@@ -961,7 +1029,7 @@ function renderLedgerPages(){
       <div class="ledger-page">
         <div class="ledger-header">
           <div class="lh-title">工事写真台帳</div>
-          <div class="lh-sub">${siteInfo.koji} ／ 施工会社: ${siteInfo.company}</div>
+          <div class="lh-sub">${koji} ／ 施工会社: ${company}</div>
           <div class="lh-sub">工種: ${k} ／ ${chukaLabel()}: ${c}</div>
           <div class="lh-page">${pi+1} / ${pages.length} ページ</div>
         </div>
@@ -982,9 +1050,9 @@ function renderLedgerPages(){
 
 function renderLedger(){
   refreshLedgerSelects(false);
-  const key = ledgerKosyuSel.value + '::' + ledgerChukaSel.value;
+  const key = ledgerKojiSel.value + '::' + ledgerKosyuSel.value + '::' + ledgerChukaSel.value;
   if(key !== ledgerLastKey){
-    // 工種・中科目の組み合わせが変わったら、その時点の写真を全選択状態にする
+    // 工事名・工種・中科目の組み合わせが変わったら、その時点の写真を全選択状態にする
     ledgerSelectedIds = new Set(ledgerCandidates().map(p=>p.id));
     ledgerLastKey = key;
   }
@@ -1610,6 +1678,7 @@ document.getElementById('shutterBtn').addEventListener('click', async ()=>{
   photos.push({
     id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
     kosyu: s.kosyu, chuka: s.chuka, kotei: s.kotei, item: s.item, sokuten: s.sokuten,
+    koji: siteInfo.koji,
     thumb, ts: Date.now(), isRepresentative: false
   });
   await savePhotos();
@@ -1626,13 +1695,26 @@ checkKosyu.addEventListener('change', ()=> renderChecklist(true, true));
 checkChuka.addEventListener('change', ()=> renderChecklist(false, true));
 checkSokuten.addEventListener('change', ()=> renderChecklist(false, false));
 
-function sokutenListFor(kosyu, chuka){
+function kojiListFromPhotos(){
+  const set = new Set(photos.map(p=>p.koji).filter(Boolean));
+  set.add(siteInfo.koji);
+  return Array.from(set).sort();
+}
+
+function sokutenListFor(koji, kosyu, chuka){
   const set = new Set();
-  photos.filter(p=>p.kosyu===kosyu && p.chuka===chuka).forEach(p=> set.add(p.sokuten || '(未入力)'));
+  photos.filter(p=>p.koji===koji && p.kosyu===kosyu && p.chuka===chuka).forEach(p=> set.add(p.sokuten || '(未入力)'));
   return Array.from(set).sort();
 }
 
 function renderChecklist(resetChuka, resetSokuten){
+  const kojiOpts = kojiListFromPhotos();
+  const prevKoji = checkKoji.value;
+  checkKoji.innerHTML = kojiOpts.map(n=>`<option>${n}</option>`).join('');
+  if(kojiOpts.includes(prevKoji)) checkKoji.value = prevKoji;
+  else if(kojiOpts.includes(siteInfo.koji)) checkKoji.value = siteInfo.koji;
+  const koji = checkKoji.value;
+
   const k = checkKosyu.value || kosyuList()[0];
   checkKosyu.value = k;
 
@@ -1643,7 +1725,7 @@ function renderChecklist(resetChuka, resetSokuten){
   else checkChuka.value = chukaOpts[0] || '';
   const chuka = checkChuka.value;
 
-  const sokList = chuka ? sokutenListFor(k, chuka) : [];
+  const sokList = chuka ? sokutenListFor(koji, k, chuka) : [];
   const prevSok = checkSokuten.value;
   checkSokuten.innerHTML = `<option value="__all__">すべての測点</option>` +
     sokList.map(s=>`<option value="${s}">${s}</option>`).join('');
@@ -1661,7 +1743,7 @@ function renderChecklist(resetChuka, resetSokuten){
     document.getElementById('cntOk').textContent = 0;
     document.getElementById('cntNg').textContent = 0;
     document.getElementById('cntAll').textContent = 0;
-    document.getElementById('checklistSub').textContent = `${k} の撮影漏れチェック結果`;
+    document.getElementById('checklistSub').textContent = `${koji} / ${k} の撮影漏れチェック結果`;
     return;
   }
 
@@ -1672,7 +1754,7 @@ function renderChecklist(resetChuka, resetSokuten){
     let rows = '';
     items.forEach(item=>{
       const match = photos.find(p=>
-        p.kosyu===k && p.chuka===chuka && p.kotei===kotei && p.item===item.name &&
+        p.koji===koji && p.kosyu===k && p.chuka===chuka && p.kotei===kotei && p.item===item.name &&
         (sokFilter === '__all__' || (p.sokuten||'(未入力)') === sokFilter)
       );
       totalReq++;
@@ -1694,7 +1776,7 @@ function renderChecklist(resetChuka, resetSokuten){
   if(totalReq===0){
     body.innerHTML = `<div class="empty-note">この工種・${chukaLabel()}の必須テンプレートが未設定です。④テンプレート編集から追加できます。</div>`;
   } else if(sokList.length===0){
-    body.innerHTML = `<div class="empty-note">まだこの工種・${chukaLabel()}の撮影データがありません。②撮影で測点を入力して撮影すると、ここで測点ごとに確認できます。</div>` + body.innerHTML;
+    body.innerHTML = `<div class="empty-note">まだこの現場・工種・${chukaLabel()}の撮影データがありません。②撮影で測点を入力して撮影すると、ここで測点ごとに確認できます。</div>` + body.innerHTML;
   }
 
   if(siteInfo.calsMode && totalReq > 0){
@@ -1705,8 +1787,8 @@ function renderChecklist(resetChuka, resetSokuten){
   document.getElementById('cntNg').textContent = totalReq - totalOk;
   document.getElementById('cntAll').textContent = totalReq;
   document.getElementById('checklistSub').textContent = sokFilter === '__all__'
-    ? `${k} / ${chuka} の撮影漏れチェック結果(全測点)`
-    : `${k} / ${chuka} / 測点: ${sokFilter} の撮影漏れチェック結果`;
+    ? `${koji} / ${k} / ${chuka} の撮影漏れチェック結果(全測点)`
+    : `${koji} / ${k} / ${chuka} / 測点: ${sokFilter} の撮影漏れチェック結果`;
 
   document.querySelectorAll('.del-btn').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
@@ -1728,17 +1810,17 @@ function renderChecklist(resetChuka, resetSokuten){
   });
   const exportBtn = document.getElementById('calsExportBtn');
   if(exportBtn){
-    exportBtn.addEventListener('click', ()=> exportCalsData(k, chuka));
+    exportBtn.addEventListener('click', ()=> exportCalsData(koji, k, chuka));
   }
 }
 
 /* CALS/EC デジタル写真管理情報基準を参考にした簡易書き出し(参考用・正式フォーマットの完全な代替ではありません) */
-function exportCalsData(kosyu, chuka){
+function exportCalsData(koji, kosyu, chuka){
   const records = photos
-    .filter(p => p.kosyu===kosyu && p.chuka===chuka)
+    .filter(p => p.koji===koji && p.kosyu===kosyu && p.chuka===chuka)
     .map(p => ({
-      工事名: siteInfo.koji,
-      施工会社: siteInfo.company,
+      工事名: p.koji,
+      施工会社: siteInfo.koji===p.koji ? siteInfo.company : (projects[p.koji]&&projects[p.koji].company) || '',
       工種: p.kosyu,
       種別: p.chuka,
       細別: p.item,
@@ -1751,7 +1833,7 @@ function exportCalsData(kosyu, chuka){
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `CALS_写真管理_${kosyu}_${chuka}.json`;
+  a.download = `CALS_写真管理_${koji}_${kosyu}_${chuka}.json`;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -1935,6 +2017,8 @@ if('serviceWorker' in navigator){
 /* ---------------- init ---------------- */
 (async function init(){
   await loadSiteInfo();
+  await loadProjects();
+  await rememberCurrentProject();
   applyBoardColor();
   applyBoardScale();
   applyBoardRotation();
